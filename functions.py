@@ -170,7 +170,10 @@ def spike_detect(AnalogSignal, bounds, lowpass_freq=1000*pq.Hz):
                                                     lowpass_freq=lowpass_freq)
 
     # find relative maxima / minima
-    peak_inds = signal.argrelmax(AnalogSignal)[0]
+    if np.all(bounds > 0):
+        peak_inds = signal.argrelmax(AnalogSignal)[0]
+    else:
+        peak_inds = signal.argrelmin(AnalogSignal)[0]
 
     # to data structure
     peak_amps = AnalogSignal.magnitude[peak_inds, :, sp.newaxis] * AnalogSignal.units
@@ -263,12 +266,18 @@ def peak_reject(Templates, f=3):
     """ detect outliers using peak rejection criterion. Peak must be at least
     f times larger than first or last sample. Return outlier indices """
     # peak criterion
+
     n_samples = Templates.shape[0]
     mid_ix = int(n_samples/2)
     peak = Templates[mid_ix,:]
     left = Templates[0,:]
     right = Templates[-1,:]
-    bad_inds = sp.logical_or(left > peak/f, right > peak/f)
+
+    # this takes care of negative or positive spikes
+    if np.average(Templates[mid_ix,:]) > 0:
+        bad_inds = sp.logical_or(left > peak/f, right > peak/f)
+    else:
+        bad_inds = sp.logical_or(left < peak/f, right < peak/f)
     return bad_inds
 
 def reject_spikes(Templates, SpikeInfo, unit_column, n_neighbors=80, verbose=False):
@@ -483,7 +492,6 @@ def Score_spikes(Templates, SpikeInfo, unit_column, Models, score_metric=Rss, pe
             Scores[i,ui] = Scores[i,ui] * (1+penalty)
             
     return Scores, units
-
 
 """
  

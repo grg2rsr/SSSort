@@ -102,12 +102,6 @@ print_msg("highpass filtering data at %.2f Hz" % freq)
 for seg in Blk.segments:
     seg.analogsignals[0] = ele.signal_processing.butter(seg.analogsignals[0], highpass_freq=freq)
 
-# invert if peaks are negative
-if Config.get('preprocessing','peak_mode') == 'negative':
-    print_msg("inverting signal")
-    for seg in Blk.segments:
-        seg.analogsignals[0] *= -1
-
 if Config.getboolean('preprocessing','z_trials'):
     print_msg("z-scoring analogsignals for each trial")
     for seg in Blk.segments:
@@ -133,10 +127,18 @@ mad_thresh = Config.getfloat('spike detect', 'mad_thresh')
 bad_segments = []
 for i, seg in enumerate(Blk.segments):
     AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
-    st = spike_detect(AnalogSignal, [MAD(AnalogSignal)*mad_thresh, sp.inf] * AnalogSignal.units)
+
+    # invert
+    if Config.get('preprocessing','peak_mode') == 'negative': # TODO peak mode should be a spike detect parameter
+        bounds = [-sp.inf, MAD(AnalogSignal) * -mad_thresh]
+    else:
+        bounds = [MAD(AnalogSignal) * mad_thresh, sp.inf]
+        
+    st = spike_detect(AnalogSignal, bounds * AnalogSignal.units)
+
     if st.times.shape[0] == 0:
-        stim_name = Path(seg.annotations['filename']).stem
-        print_msg("no spikes found for segment %i:%s" % (i,stim_name))
+        seg_name = Path(seg.annotations['filename']).stem
+        print_msg("no spikes found for segment %i:%s" % (i, seg_name))
         bad_segments.append(i)
     st.annotate(kind='all_spikes')
 
