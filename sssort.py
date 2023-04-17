@@ -151,39 +151,6 @@ for i, seg in enumerate(Blk.segments):
 n_spikes = sp.sum([seg.spiketrains[0].shape[0] for seg in Blk.segments])
 print_msg("total number of spikes found: %s" % n_spikes)
 
-if Config.getboolean('preprocessing', 'sd_reject'):
-    stim_onset = Config.getfloat('preprocessing', 'stim_onset') * pq.s
-    alpha = Config.getfloat('preprocessing', 'sd_reject_alpha')
-    sd_rej_fac = stats.distributions.norm.isf(alpha) # hardcoded
-
-    Peaks = []
-    for i, Seg in enumerate(Blk.segments):
-        peaks = get_all_peaks([Seg], lowpass_freq=1*pq.kHz, t_max=stim_onset)
-        Peaks.append(peaks)
-
-    mus = sp.array([sp.average(peaks) for peaks in Peaks])
-    sigs = sp.array([sp.std(peaks) for peaks in Peaks])
-    grand_mu = sp.average([sp.average(peaks) for peaks in Peaks])
-    grand_sig = sp.std([sp.average(peaks) for peaks in Peaks])
-
-    bad_trials = sp.logical_or(mus < (grand_mu - sd_rej_fac * grand_sig), mus > (grand_mu + sd_rej_fac * grand_sig))
-    [bad_segments.append(i) for i in sp.where(bad_trials)[0]]
-    # print_msg("rejecting %i out of %i trials" % (sum(bad_trials), bad_trials.shape[0]))
-
-if len(bad_segments) > 0:
-    good_segments = []
-    for i, seg in enumerate(Blk.segments):
-        if i not in bad_segments:
-            good_segments.append(seg)
-        else:
-            stim_name = Path(Blk.segments[i].annotations['filename']).stem
-            print_msg("rejecting: %i:%s" % (i,stim_name))
-
-    Blk.segments = good_segments
-
-    n_spikes = sp.sum([seg.spiketrains[0].shape[0] for seg in Blk.segments])
-    print_msg("total number of spikes left: %s" % n_spikes)
-
 """
  
  ######## ######## ##     ## ########  ##          ###    ######## ########  ######  
