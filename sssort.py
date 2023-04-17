@@ -228,7 +228,10 @@ print_msg("saving Templates to %s" % outpath)
 
 n_clusters_init = Config.getint('spike sort','init_clusters')
 print_msg("initial kmeans with %i clusters" % n_clusters_init)
-pca = PCA(n_components=5) # FIXME HARDCODED PARAMETER
+
+# initial clustering in the same space as subsequent spikes models
+n_model_comp = Config.getint('spike model','n_model_comp')
+pca = PCA(n_components=n_model_comp)
 X = pca.fit_transform(Templates.T)
 kmeans_labels = KMeans(n_clusters=n_clusters_init).fit_predict(X)
 spike_labels = kmeans_labels.astype('U')
