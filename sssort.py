@@ -448,6 +448,12 @@ outpath = results_folder / 'result.dill'
 print_msg("saving Blk as .dill to %s" % outpath)
 sssio.blk2dill(Blk, outpath)
 
+# store models
+outpath = results_folder / 'Models.dill'
+print_msg("saving Models as .dill to %s" % outpath)
+with open(outpath, 'wb') as fH:
+    dill.dump(Models, fH)
+
 print_msg("data is stored")
 
 # output csv data
