@@ -61,9 +61,9 @@ def print_msg(msg, log=True):
     if os.name == 'posix':
         mem_used = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6
         # msg = "%s%s\t%s\t%s%s" % (colorama.Fore.CYAN, timestr, memstr, colorama.Fore.GREEN, msg)
-        mem_used = sp.around(mem_used, 2)
+        mem_used = np.around(mem_used, 2)
         memstr = '('+str(mem_used) + ' GB): '
-        timestr = tp.humantime(sp.around(time.time()-t0,2))
+        timestr = tp.humantime(np.around(time.time()-t0,2))
         print(colorama.Fore.CYAN + timestr + '\t' +  memstr + '\t' +
               colorama.Fore.GREEN + msg)
         if log:
@@ -71,7 +71,7 @@ def print_msg(msg, log=True):
                 log_str = timestr + '\t' +  memstr + '\t' + msg + '\n'
                 fH.writelines(log_str)
     else:
-        timestr = tp.humantime(sp.around(time.time()-t0,2))
+        timestr = tp.humantime(np.around(time.time()-t0,2))
         print(colorama.Fore.CYAN + timestr + '\t' +
               colorama.Fore.GREEN + msg)
         if log:
@@ -100,8 +100,8 @@ def select_by_dict(objs, **selection):
 
 def sort_units(units):
     """ helper to sort units ascendingly according to their number """
-    units = sp.array(units,dtype='int32')
-    units = sp.sort(units).astype('U')
+    units = np.array(units,dtype='int32')
+    units = np.sort(units).astype('U')
     return list(units)
 
 def get_units(SpikeInfo, unit_column, remove_unassinged=True):
@@ -125,7 +125,7 @@ def unassign_spikes(SpikeInfo, unit_column, min_good=5):
     units = get_units(SpikeInfo, unit_column)
     for unit in units:
         Df = SpikeInfo.groupby(unit_column).get_group(unit)
-        if sp.sum(Df['good']) < min_good:
+        if np.sum(Df['good']) < min_good:
             print_msg("not enough good spikes for unit %s" %unit)
             SpikeInfo.loc[Df.index, unit_column] = '-1'
     return SpikeInfo
@@ -146,7 +146,7 @@ def unassign_spikes(SpikeInfo, unit_column, min_good=5):
 def MAD(AnalogSignal):
     """ median absolute deviation of an AnalogSignal """
     X = AnalogSignal.magnitude
-    mad = sp.median(sp.absolute(X - sp.median(X))) * AnalogSignal.units
+    mad = np.median(np.absolute(X - np.median(X))) * AnalogSignal.units
     return mad
 
 def spike_detect(AnalogSignal, bounds, lowpass_freq=1000*pq.Hz):
@@ -176,7 +176,7 @@ def spike_detect(AnalogSignal, bounds, lowpass_freq=1000*pq.Hz):
         peak_inds = signal.argrelmin(AnalogSignal)[0]
 
     # to data structure
-    peak_amps = AnalogSignal.magnitude[peak_inds, :, sp.newaxis] * AnalogSignal.units
+    peak_amps = AnalogSignal.magnitude[peak_inds, :, np.newaxis] * AnalogSignal.units
 
     tvec = AnalogSignal.times
     SpikeTrain = neo.core.SpikeTrain(tvec[peak_inds],
@@ -207,7 +207,7 @@ def bounded_threshold(SpikeTrain, bounds):
     SpikeTrain = copy.deepcopy(SpikeTrain)
     peak_amps = SpikeTrain.waveforms.max(axis=1)
 
-    good_inds = sp.logical_and(peak_amps > bounds[0], peak_amps < bounds[1])
+    good_inds = np.logical_and(peak_amps > bounds[0], peak_amps < bounds[1])
     SpikeTrain = SpikeTrain[good_inds.flatten()]
     return SpikeTrain
 
@@ -226,7 +226,7 @@ def get_all_peaks(Segments, lowpass_freq=1*pq.kHz,t_max=None):
         if t_max is not None:
             st = st.time_slice(st.t_start,t_max)
         peaks.append(get_asig_at_st_times(asig,st)[0])
-    peaks = sp.concatenate(peaks)
+    peaks = np.concatenate(peaks)
     return peaks
 
 
@@ -244,13 +244,13 @@ def get_all_peaks(Segments, lowpass_freq=1*pq.kHz,t_max=None):
 
 def get_Templates(data, inds, n_samples):
     """ slice windows of n_samples (symmetric) out of data at inds """
-    hwsize = sp.int32(n_samples/2)
+    hwsize = np.int32(n_samples/2)
 
     # check for valid inds
     # N = data.shape[0]
-    # inds = inds[sp.logical_and(inds > hwsize, inds < N-hwsize)]
+    # inds = inds[np.logical_and(inds > hwsize, inds < N-hwsize)]
 
-    Templates = sp.zeros((n_samples,inds.shape[0]))
+    Templates = np.zeros((n_samples,inds.shape[0]))
     for i, ix in enumerate(inds):
         Templates[:,i] = data[ix-hwsize:ix+hwsize]
 
@@ -275,9 +275,9 @@ def peak_reject(Templates, f=3):
 
     # this takes care of negative or positive spikes
     if np.average(Templates[mid_ix,:]) > 0:
-        bad_inds = sp.logical_or(left > peak/f, right > peak/f)
+        bad_inds = np.logical_or(left > peak/f, right > peak/f)
     else:
-        bad_inds = sp.logical_or(left < peak/f, right < peak/f)
+        bad_inds = np.logical_or(left < peak/f, right < peak/f)
     return bad_inds
 
 def reject_spikes(Templates, SpikeInfo, unit_column, n_neighbors=80, verbose=False):
@@ -285,17 +285,17 @@ def reject_spikes(Templates, SpikeInfo, unit_column, n_neighbors=80, verbose=Fal
     units = get_units(SpikeInfo, unit_column)
     spike_labels = SpikeInfo[unit_column]
     for unit in units:
-        ix = sp.where(spike_labels == unit)[0]
+        ix = np.where(spike_labels == unit)[0]
         a = outlier_reject(Templates[:,ix], n_neighbors)
         b = peak_reject(Templates[:,ix])
-        good_inds_unit = ~sp.logical_or(a,b)
+        good_inds_unit = ~np.logical_or(a,b)
 
         SpikeInfo.loc[ix,'good'] = good_inds_unit
         
         if verbose:
             n_total = ix.shape[0]
-            n_good = sp.sum(good_inds_unit)
-            n_bad = sp.sum(~good_inds_unit)
+            n_good = np.sum(good_inds_unit)
+            n_bad = np.sum(~good_inds_unit)
             frac = n_good / n_total
             print_msg("# spikes for unit %s: total:%i \t good/bad:%i,%i \t %.2f" % (unit, n_total, n_good, n_bad, frac))
 
@@ -386,17 +386,17 @@ def train_Models(SpikeInfo, unit_column, Templates, n_comp=5, verbose=True):
 
 # def local_frate1(t, mu, sig):
 #     """ local firing rate - symmetric gaussian kernel with width parameter sig """
-#     return 1/(sig*sp.sqrt(2*sp.pi)) * sp.exp(-0.5 * ((t-mu)/sig)**2)
+#     return 1/(sig*np.sqrt(2*np.pi)) * np.exp(-0.5 * ((t-mu)/sig)**2)
 
 def local_frate(t, mu, tau):
     """ local firing rate - causal alpha kernel with shape parameter tau """
-    y = (1/tau**2)*(t-mu)*sp.exp(-(t-mu)/tau)
+    y = (1/tau**2)*(t-mu)*np.exp(-(t-mu)/tau)
     y[t < mu] = 0
     return y
 
 def est_rate(spike_times, eval_times, sig):
     """ returns estimated rate at spike_times """
-    rate = local_frate(eval_times[:,sp.newaxis], spike_times[sp.newaxis,:], sig).sum(1)
+    rate = local_frate(eval_times[:,np.newaxis], spike_times[np.newaxis,:], sig).sum(1)
     return rate
 
 def calc_update_frates(Segments, SpikeInfo, unit_column, kernel_fast, kernel_slow):
@@ -457,7 +457,7 @@ def calc_update_frates(Segments, SpikeInfo, unit_column, kernel_fast, kernel_slo
 
 def Rss(X,Y):
     """ sum of squared residuals """
-    return sp.sum((X-Y)**2) / X.shape[0]
+    return np.sum((X-Y)**2) / X.shape[0]
 
 def Score_spikes(Templates, SpikeInfo, unit_column, Models, score_metric=Rss, penalty=0.1):
     """ Score all spikes using Models """
@@ -468,8 +468,8 @@ def Score_spikes(Templates, SpikeInfo, unit_column, Models, score_metric=Rss, pe
     n_units = len(units)
 
     n_spikes = spike_ids.shape[0]
-    Scores = sp.zeros((n_spikes,n_units))
-    Rates = sp.zeros((n_spikes,n_units))
+    Scores = np.zeros((n_spikes,n_units))
+    Rates = np.zeros((n_spikes,n_units))
 
     for i, spike_id in enumerate(spike_ids):
         Rates[i,:] = [SpikeInfo.loc[spike_id,'frate_from_%s' % unit] for unit in units]
@@ -483,7 +483,7 @@ def Score_spikes(Templates, SpikeInfo, unit_column, Models, score_metric=Rss, pe
             spike_pred = Models[unit].predict(rate)
             Scores[i,j] = score_metric(spike, spike_pred)
 
-    Scores[sp.isnan(Scores)] = sp.inf
+    Scores[np.isnan(Scores)] = np.inf
     
     # penalty adjust
     unit_inds = [units.index(i) if (i != '-1')  else -1 for i in SpikeInfo[unit_column].values]
@@ -512,8 +512,8 @@ def calculate_pairwise_distances(Templates, SpikeInfo, unit_column, n_comp=5):
     units = get_units(SpikeInfo, unit_column)
     n_units = len(units)
 
-    Avgs = sp.zeros((n_units,n_units))
-    Sds = sp.zeros((n_units,n_units))
+    Avgs = np.zeros((n_units,n_units))
+    Sds = np.zeros((n_units,n_units))
     
     pca = PCA(n_components=n_comp)
     X = pca.fit_transform(Templates.T)
@@ -525,8 +525,8 @@ def calculate_pairwise_distances(Templates, SpikeInfo, unit_column, n_comp=5):
             T_a = X[ix_a,:]
             T_b = X[ix_b,:]
             D_pw = metrics.pairwise.euclidean_distances(T_a,T_b)
-            Avgs[i,j] = sp.average(D_pw)
-            Sds[i,j] = sp.std(D_pw)
+            Avgs[i,j] = np.average(D_pw)
+            Sds[i,j] = np.std(D_pw)
     return Avgs, Sds
 
 def best_merge(Avgs, Sds, units, alpha=1):
@@ -538,14 +538,14 @@ def best_merge(Avgs, Sds, units, alpha=1):
         Q[i,i] = Avgs[i,i] + alpha * Sds[i,i]
 
     try:
-        merge_candidates = list(zip(sp.arange(Q.shape[0]),sp.argmin(Q,1)))
+        merge_candidates = list(zip(np.arange(Q.shape[0]),np.argmin(Q,1)))
         # remove self
         for i in range(Q.shape[0]):
             try:
                 merge_candidates.remove((i,i))
             except ValueError:
                 pass
-        min_ix = sp.argmin([Q[c] for c in merge_candidates])
+        min_ix = np.argmin([Q[c] for c in merge_candidates])
         pair = merge_candidates[min_ix]
         merge =  [units[pair[0]],units[pair[1]]]
     except:

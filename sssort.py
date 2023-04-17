@@ -130,9 +130,9 @@ for i, seg in enumerate(Blk.segments):
 
     # invert
     if Config.get('spike detect','peak_mode') == 'negative': # TODO peak mode should be a spike detect parameter
-        bounds = [-sp.inf, MAD(AnalogSignal) * -mad_thresh]
+        bounds = [-np.inf, MAD(AnalogSignal) * -mad_thresh]
     else:
-        bounds = [MAD(AnalogSignal) * mad_thresh, sp.inf]
+        bounds = [MAD(AnalogSignal) * mad_thresh, np.inf]
         
     st = spike_detect(AnalogSignal, bounds * AnalogSignal.units)
 
@@ -148,7 +148,7 @@ for i, seg in enumerate(Blk.segments):
     st_cut.t_start = st.t_start
     seg.spiketrains.append(st_cut)
 
-n_spikes = sp.sum([seg.spiketrains[0].shape[0] for seg in Blk.segments])
+n_spikes = np.sum([seg.spiketrains[0].shape[0] for seg in Blk.segments])
 print_msg("total number of spikes found: %s" % n_spikes)
 
 """
@@ -174,11 +174,11 @@ for j, seg in enumerate(Blk.segments):
     inds = (seg.spiketrains[0].times * fs).simplified.magnitude.astype('int32')
     templates.append(get_Templates(data, inds, n_samples))
 
-Templates = sp.concatenate(templates,axis=1)
+Templates = np.concatenate(templates,axis=1)
 
 # templates to disk
 outpath = results_folder / 'Templates.npy'
-sp.save(outpath, Templates)
+np.save(outpath, Templates)
 print_msg("saving Templates to %s" % outpath)
 
 """
@@ -219,17 +219,17 @@ SpikeInfo = pd.DataFrame()
 
 # count spikes
 n_spikes = Templates.shape[1]
-SpikeInfo['id'] = sp.arange(n_spikes,dtype='int32')
+SpikeInfo['id'] = np.arange(n_spikes,dtype='int32')
 
 # get all spike times
-spike_times = sp.concatenate([seg.spiketrains[0].times.magnitude for seg in Blk.segments])
+spike_times = np.concatenate([seg.spiketrains[0].times.magnitude for seg in Blk.segments])
 SpikeInfo['time'] = spike_times
 
 # get segment labels
 segment_labels = []
 for i, seg in enumerate(Blk.segments):
     segment_labels.append(seg.spiketrains[0].shape[0] * [i])
-segment_labels = sp.concatenate(segment_labels)
+segment_labels = np.concatenate(segment_labels)
 SpikeInfo['segment'] = segment_labels
 
 # get all labels
@@ -318,8 +318,8 @@ for it in range(1,its):
     Scores, units = Score_spikes(Templates, SpikeInfo, prev_unit_col, Models, score_metric=Rss, penalty=penalty)
 
     # assign new labels
-    min_ix = sp.argmin(Scores, axis=1)
-    new_labels = sp.array([units[i] for i in min_ix],dtype='object')
+    min_ix = np.argmin(Scores, axis=1)
+    new_labels = np.array([units[i] for i in min_ix],dtype='object')
     SpikeInfo[this_unit_col] = new_labels
 
     # clean assignment
@@ -346,13 +346,13 @@ for it in range(1,its):
             SpikeInfo.loc[ix, this_unit_col] = merge[0]
 
     # Model eval
-    n_changes = sp.sum(~(SpikeInfo[this_unit_col] == SpikeInfo[prev_unit_col]).values)
+    n_changes = np.sum(~(SpikeInfo[this_unit_col] == SpikeInfo[prev_unit_col]).values)
     valid_ix = np.where(SpikeInfo[this_unit_col] != '-1')[0]
     
-    Rss_sum = sp.sum(np.min(Scores[valid_ix], axis=1)) / Templates.shape[1]
+    Rss_sum = np.sum(np.min(Scores[valid_ix], axis=1)) / Templates.shape[1]
     ScoresSum.append(Rss_sum)
     units = get_units(SpikeInfo, this_unit_col)
-    AICs.append(len(units) - 2 * sp.log(Rss_sum))
+    AICs.append(len(units) - 2 * np.log(Rss_sum))
 
     # print iteration info
     print_msg("It:%i - Rss sum: %.3e - # reassigned spikes: %s" % (it, Rss_sum, n_changes))
@@ -396,7 +396,7 @@ for i, seg in tqdm(enumerate(Blk.segments),desc="populating block for output"):
     spike_labels = St.annotations['unit_labels']
     sts = [St]
     for unit in units:
-        times = St.times[sp.array(spike_labels) == unit]
+        times = St.times[np.array(spike_labels) == unit]
         st = neo.core.SpikeTrain(times, t_start = St.t_start, t_stop=St.t_stop)
         st.annotate(unit=unit)
         sts.append(st)
@@ -454,12 +454,12 @@ if Config.getboolean('output','csv'):
         FratesDf.to_csv(outpath)
             
         # firing rates - downsampled
-        # tbins = sp.arange(0,12.2,0.1)
+        # tbins = np.arange(0,12.2,0.1)
         # FratesDf_ds = pd.DataFrame(columns=FratesDf.columns)
         # for i in range(1,tbins.shape[0]):
         #     t0 = tbins[i-1]
         #     t1 = tbins[i]
-        #     ix = sp.logical_and(FratesDf['t'] > t0,FratesDf['t'] < t1)
+        #     ix = np.logical_and(FratesDf['t'] > t0,FratesDf['t'] < t1)
         #     FratesDf_ds = FratesDf_ds.append(FratesDf.iloc[ix.values].mean(axis=0),ignore_index=True)
         # FratesDf_ds['t'] = tbins[:-1]
 
@@ -486,7 +486,7 @@ for j, Seg in enumerate(Blk.segments):
     plot_segment(Seg, units, save=outpath)
 
 # plot all sorted spikes
-zoom = sp.array(Config.get('output','zoom').split(','),dtype='float32') / 1000
+zoom = np.array(Config.get('output','zoom').split(','),dtype='float32') / 1000
 unit_column = 'unit_%i' % it
 for j, Seg in enumerate(Blk.segments):
     seg_name = Path(Seg.annotations['filename']).stem
