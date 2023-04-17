@@ -89,7 +89,7 @@ def plot_templates(Templates, SpikeInfo, unit_column=None, unit_order=None, N=10
 
     for i, unit in enumerate(units):
         try:
-            ix = SpikeInfo.groupby((unit_column,'good')).get_group((unit,True))['id']
+            ix = SpikeInfo.groupby([unit_column,'good']).get_group((unit,True))['id']
             if N is not None and ix.shape[0] > N:
                 ix = ix.sample(N)
             T = Templates[:,ix]
@@ -98,7 +98,7 @@ def plot_templates(Templates, SpikeInfo, unit_column=None, unit_order=None, N=10
             pass
 
         try:
-            ix = SpikeInfo.groupby((unit_column,'good')).get_group((unit,False))['id']
+            ix = SpikeInfo.groupby([unit_column,'good']).get_group((unit,False))['id']
             if N is not None and ix.shape[0] > N:
                 ix = ix.sample(N)
             T = Templates[:,ix]
@@ -185,7 +185,7 @@ def plot_fitted_spikes(Segment, j, Models, SpikeInfo, unit_column, unit_order=No
         inds = inds - offset
 
         try:
-            frates = SpikeInfo.groupby((unit_column, 'segment')).get_group((unit,j))['frate_fast'].values
+            frates = SpikeInfo.groupby([unit_column, 'segment']).get_group((unit,j))['frate_fast'].values
             pred_spikes = [Models[unit].predict(f) for f in frates]
 
             for i, spike in enumerate(pred_spikes):
@@ -254,7 +254,7 @@ def plot_clustering(Templates, SpikeInfo, unit_column, n_components=5, N=300, sa
             N = x.shape[0]
         for i in range(n_components):
             for j in range(n_components):
-                ix = sp.random.randint(0,x.shape[0],size=N)
+                ix = np.random.randint(0,x.shape[0],size=N)
                 axes[i,j].plot(x[ix,i],x[ix,j],'.',color=colors[unit],markersize=1, alpha=0.5)
 
     for ax in axes.flatten():
