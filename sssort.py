@@ -102,8 +102,8 @@ print_msg("highpass filtering data at %.2f Hz" % freq)
 for seg in Blk.segments:
     seg.analogsignals[0] = ele.signal_processing.butter(seg.analogsignals[0], highpass_freq=freq)
 
-if Config.getboolean('preprocessing','z_trials'):
-    print_msg("z-scoring analogsignals for each trial")
+if Config.getboolean('preprocessing','z_score'):
+    print_msg("z-scoring signals")
     for seg in Blk.segments:
         seg.analogsignals = [ele.signal_processing.zscore(seg.analogsignals)]
 
@@ -129,7 +129,7 @@ for i, seg in enumerate(Blk.segments):
     AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
 
     # invert
-    if Config.get('preprocessing','peak_mode') == 'negative': # TODO peak mode should be a spike detect parameter
+    if Config.get('spike detect','peak_mode') == 'negative': # TODO peak mode should be a spike detect parameter
         bounds = [-sp.inf, MAD(AnalogSignal) * -mad_thresh]
     else:
         bounds = [MAD(AnalogSignal) * mad_thresh, sp.inf]
