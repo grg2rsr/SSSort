@@ -375,8 +375,9 @@ for it in range(1,its):
 
     # Model eval
     n_changes = sp.sum(~(SpikeInfo[this_unit_col] == SpikeInfo[prev_unit_col]).values)
+    valid_ix = np.where(SpikeInfo[this_unit_col] != '-1')[0]
     
-    Rss_sum = sp.sum(np.min(Scores,axis=1)) / Templates.shape[1]
+    Rss_sum = sp.sum(np.min(Scores[valid_ix], axis=1)) / Templates.shape[1]
     ScoresSum.append(Rss_sum)
     units = get_units(SpikeInfo, this_unit_col)
     AICs.append(len(units) - 2 * sp.log(Rss_sum))
