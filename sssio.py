@@ -35,6 +35,13 @@ def raw2seg(path, fs, dtype):
     segment.analogsignals = [Asig]
     return segment
 
+def smr2seg(path):
+    reader = neo.io.Spike2IO(path)
+    Blk, = reader.read(lazy=False)
+    segment = Blk.segments[0]
+    return segment
+
+
 def list2blk(path):
     """ convenience function for reading a file containing file paths to recordings per line into a neo block """
 
@@ -53,6 +60,9 @@ def list2blk(path):
 
         if fmt== '.dill':
             segment = dill2seg(fname)
+
+        if fmt== '.smr':
+            segment = smr2seg(fname)
 
         segment.annotate(filename=fname)
         Segments.append(segment)
