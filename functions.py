@@ -351,7 +351,7 @@ def train_Models(SpikeInfo, unit_column, Templates, n_comp=5, verbose=True):
     Models = {}
     for unit in units:
         # get the corresponding spikes - restrict training to good spikes
-        SInfo = SpikeInfo.groupby((unit_column,'good')).get_group((unit,True))
+        SInfo = SpikeInfo.groupby([unit_column,'good']).get_group((unit,True))
         # data
         ix = SInfo['id']
         T = Templates[:,ix.values]
@@ -380,7 +380,7 @@ def train_Models(SpikeInfo, unit_column, Templates, n_comp=5, verbose=True):
 #     return 1/(sig*sp.sqrt(2*sp.pi)) * sp.exp(-0.5 * ((t-mu)/sig)**2)
 
 def local_frate(t, mu, tau):
-    """ local firing rate - anti-causal alpha kernel with shape parameter tau """
+    """ local firing rate - causal alpha kernel with shape parameter tau """
     y = (1/tau**2)*(t-mu)*sp.exp(-(t-mu)/tau)
     y[t < mu] = 0
     return y
@@ -401,7 +401,7 @@ def calc_update_frates(Segments, SpikeInfo, unit_column, kernel_fast, kernel_slo
     for i, seg  in enumerate(Segments):
         for j, from_unit in enumerate(from_units):
             try:
-                SInfo = SpikeInfo.groupby((unit_column,'segment')).get_group((from_unit,i))
+                SInfo = SpikeInfo.groupby([unit_column,'segment']).get_group((from_unit,i))
 
                 # spike times
                 from_times = SInfo['time'].values
@@ -419,7 +419,7 @@ def calc_update_frates(Segments, SpikeInfo, unit_column, kernel_fast, kernel_slo
             # the rates on others
             for k, to_unit in enumerate(to_units):
                 try:
-                    SInfo = SpikeInfo.groupby((unit_column, 'segment')).get_group((to_unit,i))
+                    SInfo = SpikeInfo.groupby([unit_column, 'segment']).get_group((to_unit,i))
 
                     # spike times
                     to_times = SInfo['time'].values
@@ -512,8 +512,8 @@ def calculate_pairwise_distances(Templates, SpikeInfo, unit_column, n_comp=5):
 
     for i,unit_a in enumerate(units):
         for j, unit_b in enumerate(units):
-            ix_a = SpikeInfo.groupby((unit_column, 'good')).get_group((unit_a, True))['id']
-            ix_b = SpikeInfo.groupby((unit_column, 'good')).get_group((unit_b, True))['id']
+            ix_a = SpikeInfo.groupby([unit_column, 'good']).get_group((unit_a, True))['id']
+            ix_b = SpikeInfo.groupby([unit_column, 'good']).get_group((unit_b, True))['id']
             T_a = X[ix_a,:]
             T_b = X[ix_b,:]
             D_pw = metrics.pairwise.euclidean_distances(T_a,T_b)
