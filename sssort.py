@@ -121,35 +121,26 @@ if Config.getboolean('preprocessing','z_score'):
 
 print_msg('- spike detect - ')
 
-# detecting all spikes by MAD thresholding
-mad_thresh = Config.getfloat('spike detect', 'mad_thresh')
+# global mad
+global_mad = np.average([MAD(seg.analogsignals[0]) for seg in Blk.segments])
+mad_thresh = Config.getfloat('spike detect', 'amplitude')
+min_prominence = Config.getfloat('spike detect', 'min_prominence')
+wsize = Config.getfloat('spike detect', 'wsize') * pq.ms
 
-bad_segments = []
 for i, seg in enumerate(Blk.segments):
     AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
 
-    # invert
-    if Config.get('spike detect','peak_mode') == 'negative': # TODO peak mode should be a spike detect parameter
-        bounds = [-np.inf, MAD(AnalogSignal) * -mad_thresh]
-    else:
-        bounds = [MAD(AnalogSignal) * mad_thresh, np.inf]
-        
-    st = spike_detect(AnalogSignal, bounds * AnalogSignal.units)
+    # inverting
+    if Config.get('spike detect','peak_mode') == 'negative':
+        AnalogSignal *= -1
 
-    if st.times.shape[0] == 0:
-        seg_name = Path(seg.annotations['filename']).stem
-        print_msg("no spikes found for segment %i:%s" % (i, seg_name))
-        bad_segments.append(i)
+    st = spike_detect(AnalogSignal, global_mad*mad_thresh, min_prominence)
     st.annotate(kind='all_spikes')
 
     # remove border spikes
-    wsize = Config.getfloat('spike detect', 'wsize') * pq.ms
     st_cut = st.time_slice(st.t_start + wsize/2, st.t_stop - wsize/2)
     st_cut.t_start = st.t_start
     seg.spiketrains.append(st_cut)
-
-n_spikes = np.sum([seg.spiketrains[0].shape[0] for seg in Blk.segments])
-print_msg("total number of spikes found: %s" % n_spikes)
 
 """
  
@@ -170,8 +161,13 @@ n_samples = (wsize * fs).simplified.magnitude.astype('int32')
 
 templates = []
 for j, seg in enumerate(Blk.segments):
-    data = seg.analogsignals[0].magnitude.flatten()
-    inds = (seg.spiketrains[0].times * fs).simplified.magnitude.astype('int32')
+
+    AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
+    data = AnalogSignal.magnitude.flatten()
+
+    SpikeTrain, = select_by_dict(seg.spiketrains, kind='all_spikes')
+    inds = (SpikeTrain.times * fs).simplified.magnitude.astype('int32')
+
     templates.append(get_Templates(data, inds, n_samples))
 
 Templates = np.concatenate(templates,axis=1)
@@ -222,13 +218,18 @@ n_spikes = Templates.shape[1]
 SpikeInfo['id'] = np.arange(n_spikes,dtype='int32')
 
 # get all spike times
-spike_times = np.concatenate([seg.spiketrains[0].times.magnitude for seg in Blk.segments])
+spike_times = []
+for seg in Blk.segments:
+    SpikeTrain, = select_by_dict(seg.spiketrains, kind='all_spikes')
+    spike_times.append(SpikeTrain.times.magnitude)
+spike_times = np.concatenate(spike_times)
 SpikeInfo['time'] = spike_times
 
 # get segment labels
 segment_labels = []
 for i, seg in enumerate(Blk.segments):
-    segment_labels.append(seg.spiketrains[0].shape[0] * [i])
+    SpikeTrain, = select_by_dict(seg.spiketrains, kind='all_spikes')
+    segment_labels.append(SpikeTrain.shape[0] * [i])
 segment_labels = np.concatenate(segment_labels)
 SpikeInfo['segment'] = segment_labels
 
@@ -389,18 +390,18 @@ it = its-1 # the last
 
 for i, seg in tqdm(enumerate(Blk.segments),desc="populating block for output"):
     spike_labels = SpikeInfo.groupby(('segment')).get_group((i))['unit_%i' % it].values
-    seg.spiketrains[0].annotations['unit_labels'] = list(spike_labels)
+    SpikeTrain, = select_by_dict(seg.spiketrains, kind='all_spikes')
+    SpikeTrain.annotations['unit_labels'] = list(spike_labels)
 
     # make spiketrains
-    St = seg.spiketrains[0]
-    spike_labels = St.annotations['unit_labels']
-    sts = [St]
+    spike_labels = SpikeTrain.annotations['unit_labels']
+    sts = [SpikeTrain]
     for unit in units:
-        times = St.times[np.array(spike_labels) == unit]
-        st = neo.core.SpikeTrain(times, t_start = St.t_start, t_stop=St.t_stop)
+        times = SpikeTrain.times[np.array(spike_labels) == unit]
+        st = neo.core.SpikeTrain(times, t_start = SpikeTrain.t_start, t_stop=SpikeTrain.t_stop)
         st.annotate(unit=unit)
         sts.append(st)
-    seg.spiketrains=sts
+    seg.spiketrains = sts
 
     # est firing rates
     asigs = [seg.analogsignals[0]]

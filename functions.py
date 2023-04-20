@@ -112,14 +112,6 @@ def get_units(SpikeInfo, unit_column, remove_unassinged=True):
             units.remove('-1')
     return sort_units(units)
 
-def get_asig_at_st_times(asig, st):
-    """ return value of analogsignal at times of a spiketrain (closest samples) """
-    fs = asig.sampling_rate
-    inds = (st.times * fs).simplified.magnitude.astype('int32')
-    offset = (st.t_start * fs).simplified.magnitude.astype('int32')
-    inds = inds - offset
-    return asig.magnitude.flatten()[inds], inds
-
 def unassign_spikes(SpikeInfo, unit_column, min_good=5):
     """ unassign spikes from unit it unit does not contain enough spikes as samples """
     units = get_units(SpikeInfo, unit_column)
@@ -143,92 +135,30 @@ def unassign_spikes(SpikeInfo, unit_column, min_good=5):
  
 """
 
-def MAD(AnalogSignal):
+def MAD(AnalogSignal, keep_units=True):
     """ median absolute deviation of an AnalogSignal """
     X = AnalogSignal.magnitude
-    mad = np.median(np.absolute(X - np.median(X))) * AnalogSignal.units
+    mad = np.median(np.absolute(X - np.median(X)))
+    if keep_units:
+        mad = mad * AnalogSignal.units
     return mad
 
-def spike_detect(AnalogSignal, bounds, lowpass_freq=1000*pq.Hz):
-    """
-    detects all spikes in an AnalogSignal that fall within amplitude bounds
+def spike_detect(AnalogSignal, min_height, min_prom, lowpass_freq=1000*pq.Hz):
 
-    Args:
-        AnalogSignal (neo.core.AnalogSignal): the waveform
-        bounds (quantities.Quantity): a Quantity of shape (2,) with
-            (lower,upper) bounds, unit [uV]
-        lowpass_freq (quantities.Quantity): cutoff frequency for a smoothing
-            step before spike detection, unit [Hz]
+    data = AnalogSignal.magnitude.flatten()
 
-    Returns:
-        neo.core.SpikeTrain: the resulting SpikeTrain
-    """
+    res = signal.find_peaks(data, height=[min_height, np.inf], prominence=[min_prom, np.inf])
 
-    # filter to avoid multiple peaks
-    if lowpass_freq is not None:
-        AnalogSignal = ele.signal_processing.butter(AnalogSignal,
-                                                    lowpass_freq=lowpass_freq)
+    peak_inds = res[0]
+    peak_amps = res[1]['peak_heights'][:, np.newaxis, np.newaxis]  * AnalogSignal.units
 
-    # find relative maxima / minima
-    if np.all(bounds > 0):
-        peak_inds = signal.argrelmax(AnalogSignal)[0]
-    else:
-        peak_inds = signal.argrelmin(AnalogSignal)[0]
-
-    # to data structure
-    peak_amps = AnalogSignal.magnitude[peak_inds, :, np.newaxis] * AnalogSignal.units
-
-    tvec = AnalogSignal.times
-    SpikeTrain = neo.core.SpikeTrain(tvec[peak_inds],
-                                     t_start=AnalogSignal.t_start,
-                                     t_stop=AnalogSignal.t_stop,
-                                     sampling_rate=AnalogSignal.sampling_rate,
-                                     waveforms=peak_amps)
-
-    # subset detected SpikeTrain by bounds
-    SpikeTrain = bounded_threshold(SpikeTrain, bounds)
-
+    SpikeTrain = neo.core.SpikeTrain(AnalogSignal.times[peak_inds],
+                                        t_start=AnalogSignal.t_start,
+                                        t_stop=AnalogSignal.t_stop,
+                                        sampling_rate=AnalogSignal.sampling_rate,
+                                        waveform=peak_amps)
+    
     return SpikeTrain
-
-def bounded_threshold(SpikeTrain, bounds):
-    """
-    removes all spike from a SpikeTrain which amplitudes do not fall within the
-    specified static bounds.
-
-    Args:
-        SpikeTrain (neo.core.SpikeTrain): The SpikeTrain
-        bounds (quantities.Quantity): a Quantity of shape (2,) with
-            (lower,upper) bounds, unit [uV]
-
-    Returns:
-        neo.core.SpikeTrain: the resulting SpikeTrain
-    """
-
-    SpikeTrain = copy.deepcopy(SpikeTrain)
-    peak_amps = SpikeTrain.waveforms.max(axis=1)
-
-    good_inds = np.logical_and(peak_amps > bounds[0], peak_amps < bounds[1])
-    SpikeTrain = SpikeTrain[good_inds.flatten()]
-    return SpikeTrain
-
-
-def get_all_peaks(Segments, lowpass_freq=1*pq.kHz,t_max=None):
-    """
-    returns the values of all peaks (in all segments)
-    called once - TODO future remove
-    """
-    peaks = []
-    inds = []
-    for seg in Segments:
-        asig = seg.analogsignals[0]
-        asig = ele.signal_processing.butter(asig, lowpass_freq=lowpass_freq)
-        st = seg.spiketrains[0]
-        if t_max is not None:
-            st = st.time_slice(st.t_start,t_max)
-        peaks.append(get_asig_at_st_times(asig,st)[0])
-    peaks = np.concatenate(peaks)
-    return peaks
-
 
 """
  
@@ -245,10 +175,6 @@ def get_all_peaks(Segments, lowpass_freq=1*pq.kHz,t_max=None):
 def get_Templates(data, inds, n_samples):
     """ slice windows of n_samples (symmetric) out of data at inds """
     hwsize = np.int32(n_samples/2)
-
-    # check for valid inds
-    # N = data.shape[0]
-    # inds = inds[np.logical_and(inds > hwsize, inds < N-hwsize)]
 
     Templates = np.zeros((n_samples,inds.shape[0]))
     for i, ix in enumerate(inds):
