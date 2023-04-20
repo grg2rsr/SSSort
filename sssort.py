@@ -142,6 +142,14 @@ for i, seg in enumerate(Blk.segments):
     st_cut.t_start = st.t_start
     seg.spiketrains.append(st_cut)
 
+
+seg = Blk.segments[0]
+AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
+SpikeTrain, = select_by_dict(seg.spiketrains, kind='all_spikes')
+
+outpath = plots_folder / ("spike_detect" + fig_format)
+plot_spike_detect(AnalogSignal, SpikeTrain, 5, w=30*pq.ms, save=outpath)
+
 """
  
  ######## ######## ##     ## ########  ##          ###    ######## ########  ######  
@@ -244,7 +252,9 @@ reject_spikes(Templates, SpikeInfo, 'unit', n_neighbors, verbose=True)
 SpikeInfo = unassign_spikes(SpikeInfo, 'unit')
 
 outpath = plots_folder / ("templates_init" + fig_format)
-plot_templates(Templates, SpikeInfo, N=100, save=outpath)
+fs = Blk.segments[0].analogsignals[0].sampling_rate
+dt = (1/fs).rescale(pq.ms).magnitude
+plot_templates(Templates, SpikeInfo, dt, N=100, save=outpath)
 
 
 """
@@ -334,7 +344,9 @@ for it in range(1,its):
     
     # plot templates
     outpath = plots_folder / ("Templates_%s%s" % (this_unit_col, fig_format))
-    plot_templates(Templates, SpikeInfo, this_unit_col, save=outpath)
+    fs = Blk.segments[0].analogsignals[0].sampling_rate
+    dt = (1/fs).rescale(pq.ms).magnitude
+    plot_templates(Templates, SpikeInfo, dt,  this_unit_col, save=outpath)
 
     # every n iterations, merge
     if (it > first_merge) and (it % it_merge) == 0:

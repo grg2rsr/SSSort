@@ -71,7 +71,7 @@ def plot_Models(Models, max_rates=None, N=5, unit_order=None, save=None, colors=
         plt.close(fig)
     return fig, axes
 
-def plot_templates(Templates, SpikeInfo, unit_column=None, unit_order=None, N=100, save=None, colors=None):
+def plot_templates(Templates, SpikeInfo, dt, unit_column=None, unit_order=None, N=100, save=None, colors=None):
     """ plots all templates """
 
     if unit_column is None:
@@ -85,6 +85,8 @@ def plot_templates(Templates, SpikeInfo, unit_column=None, unit_order=None, N=10
     if colors is None:
         colors = get_colors(units)
 
+    tvec = np.arange(-1*Templates.shape[0]*dt//2, Templates.shape[0]*dt//2, dt)
+
     fig, axes = plt.subplots(ncols=len(units), sharey=True,  figsize=[len(units),2])
 
     for i, unit in enumerate(units):
@@ -93,7 +95,7 @@ def plot_templates(Templates, SpikeInfo, unit_column=None, unit_order=None, N=10
             if N is not None and ix.shape[0] > N:
                 ix = ix.sample(N)
             T = Templates[:,ix]
-            axes[i].plot(T, color=colors[unit],alpha=0.5,lw=1)
+            axes[i].plot(tvec, T, color=colors[unit],alpha=0.5,lw=1)
         except:
             pass
 
@@ -103,11 +105,12 @@ def plot_templates(Templates, SpikeInfo, unit_column=None, unit_order=None, N=10
                 ix = ix.sample(N)
             T = Templates[:,ix]
 
-            axes[i].plot(T, color='k',alpha=0.5,lw=1,zorder=-1)
+            axes[i].plot(tvec, T, color='k',alpha=0.5,lw=1,zorder=-1)
         except:
             pass
         
         axes[i].set_title(unit)
+        axes[i].set_xlabel('time (ms)')
 
     sns.despine()
     fig.tight_layout()
@@ -271,16 +274,16 @@ def plot_clustering(Templates, SpikeInfo, unit_column, n_components=5, N=300, sa
 
     return fig, axes
 
-# the plotting figure for MAD inspect
-def plot_MAD_inspect(AnalogSignal, SpikeTrain, ylim=(-5,5)):
-
-    fig, axes = plt.subplots(ncols=4, nrows=4, sharey=True)
-    axix = np.array(np.unravel_index(range(16),(4,4))).T
+def plot_spike_detect(AnalogSignal, SpikeTrain, N=4, w=50*pq.ms, ylim=(-5,5), save=None):
+    """ makes a NxN grid plot of time snippeds from the AnalogSignal with overlayed
+     detected spikes """
+    
+    fig, axes = plt.subplots(ncols=N, nrows=N, sharey=True)
+    axix = np.array(np.unravel_index(range(N**2),(N,N))).T
 
     mad = MAD(AnalogSignal)
-    w = 0.05*pq.s
 
-    for i in range(16):
+    for i in range(N**2):
         t_start = np.random.rand() * AnalogSignal.times[-1]-w
         t_stop = t_start + w
         asig = AnalogSignal.time_slice(t_start, t_stop)
@@ -297,6 +300,12 @@ def plot_MAD_inspect(AnalogSignal, SpikeTrain, ylim=(-5,5)):
         
     sns.despine(fig)
     fig.tight_layout()
+
+    if save is not None:
+        fig.savefig(save)
+        plt.close(fig)
+
+    return fig, axes
 
 def plot_fitted_spikes_offline(Segment, j, Models, SpikeInfo, unit_column, wsize, unit_order=None, zoom=None, save=None, colors=None):
     """ plot to inspect fitted spikes """
