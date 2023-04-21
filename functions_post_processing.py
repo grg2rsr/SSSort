@@ -1,0 +1,296 @@
+# system
+import sys
+import os
+import time
+import copy
+if os.name == 'posix':
+    import resource
+import warnings
+from tqdm import tqdm
+import threading
+
+# sci
+import scipy as sp
+import numpy as np
+from scipy import stats, signal
+from scipy.optimize import least_squares
+import quantities as pq
+import pandas as pd
+
+# ml
+import sklearn
+from sklearn.neighbors import LocalOutlierFactor
+from sklearn.decomposition import PCA
+from sklearn import metrics
+
+# ephys
+import neo
+import elephant as ele
+
+# print
+import colorama
+import tableprint as tp
+
+# plotting
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from pathlib import Path
+
+# own
+from functions import *
+from sssio import *
+
+
+def calc_update_final_frates(SpikeInfo, unit_column, kernel_fast):
+    """ calculate all firing rates for all units, based on unit_column. This is for after units
+have been identified as 'A' or 'B' (or unknown). Updates SpikeInfo with new columns frate_A, frate_B"""
+    
+    from_units = get_units(SpikeInfo, unit_column, remove_unassigned=True)
+
+    # estimating firing rate profile for "from unit" and getting the rate at "to unit" timepoints
+    for j, from_unit in enumerate(from_units):
+        try:
+            SInfo = SpikeInfo.groupby([unit_column]).get_group((from_unit))
+
+            # spike times
+            from_times = SInfo['time'].values
+            to_times = SpikeInfo['time'].values
+            # estimate its own rate at its own spike times
+            rate = est_rate(from_times, to_times, kernel_fast)
+            # set
+            SpikeInfo['frate_'+from_unit] = rate
+        except:
+            # can not set it's own rate, when there are no spikes in this segment for this unit
+            pass
+
+def save_all(results_folder, SpikeInfo, Blk, FinalSpikes= False):
+    # store SpikeInfo
+    outpath = results_folder / 'SpikeInfo.csv'
+    print_msg("saving SpikeInfo to %s" % outpath)
+    SpikeInfo.to_csv(outpath, index= False)
+
+    if FinalSpikes:
+        # store separate spike time lists for A and B cells
+        for unit in ['A','B']:
+            st = SpikeInfo.groupby('unit_final').get_group(unit)['time']
+            outpath = results_folder / ('Spikes'+unit+'.csv')
+            np.savetxt(outpath, st)
+    
+    # store Block
+    outpath = results_folder / 'result.dill'
+    print_msg("saving Blk as .dill to %s" % outpath)
+    blk2dill(Blk, outpath)
+
+    print_msg("data is stored")
+
+"""
+ 
+ ########  ########   ######  ########  ########   #######   ######  ########  ######   ######  
+ ##     ## ##     ## ##    ## ##     ## ##     ## ##     ## ##    ## ##       ##    ## ##    ## 
+ ##     ## ##     ## ##       ##     ## ##     ## ##     ## ##       ##       ##       ##       
+ ########  ##     ##  ######  ########  ########  ##     ## ##       ######    ######   ######  
+ ##        ##     ##       ## ##        ##   ##   ##     ## ##       ##             ##       ## 
+ ##        ##     ## ##    ## ##        ##    ##  ##     ## ##    ## ##       ##    ## ##    ## 
+ ##        #########  ######  ##        ##     ##  #######   ######  ########  ######   ######  
+ 
+"""
+
+
+def get_neighbors_amplitude(st, Templates, SpikeInfo, unit_column, unit, idx=0, t=0.3):
+    times_all = SpikeInfo['time']
+
+    idx_t = times_all.values[idx]
+
+    ini = idx_t - t
+    end = idx_t + t
+
+    times = times_all.index[np.where((times_all.values > ini) & (times_all.values < end) & (times_all.values != idx_t))]
+    neighbors = times[np.where(SpikeInfo.loc[times, unit_column].values==unit)]
+
+    T_b = Templates[:,neighbors].T
+    T_b = np.array([max(t[t.size//2:])-min(t[t.size//2:]) for t in T_b])
+
+    return sp.average(T_b)
+
+def get_duration(waveform):
+    ampl = (max(waveform)-min(waveform))
+    thres = max(waveform)-(ampl)/3
+    try:
+        duration_vals = np.where(np.isclose(waveform, thres,atol=0.06))[0]
+        dur = duration_vals[-1]-duration_vals[0]
+    except:
+        dur = -np.inf
+
+    return dur
+
+def get_neighbors_duration(st, Templates, SpikeInfo, unit_column, unit, idx=0, t=0.3):
+    times_all = SpikeInfo['time']
+
+    idx_t = times_all.values[idx]
+
+    ini = idx_t - t
+    end = idx_t + t
+
+    times = times_all.index[np.where((times_all.values > ini) & (times_all.values < end) & (times_all.values != idx_t))]
+    neighbors = times[np.where(SpikeInfo.loc[times,unit_column].values==unit)]
+
+    T_b = Templates[:,neighbors].T
+
+    durations = []
+
+    for waveform in T_b:
+        dur = get_duration(waveform)
+        durations.append(dur)
+
+    return sp.average(durations)
+
+def remove_spikes(SpikeInfo, unit_column, criteria):
+    if criteria == 'min':
+        units = get_units(SpikeInfo, unit_column)
+        spike_labels = SpikeInfo[unit_column]
+
+        n_spikes_units = []
+        for unit in units:
+            ix = sp.where(spike_labels == unit)[0]
+            n_spikes_units.append(ix.shape[0])
+
+        rm_unit = units[sp.argmin(n_spikes_units)]
+    else:
+        rm_unit = criteria
+
+    SpikeInfo[unit_column] = SpikeInfo[unit_column].replace(rm_unit, '-1')
+  
+
+def distance_to_average(Templates, averages):
+    D_pw = sp.zeros((len(averages), Templates.shape[1]))
+
+    for i,average in enumerate(averages):
+        D_pw[i,:] = metrics.pairwise.euclidean_distances(Templates.T,average.reshape(1, -1)).reshape(-1)
+    return D_pw.T
+
+def align_to(spike, mode='peak'):
+    if(spike.shape[0]!=0):
+        if type(mode) is not str:
+            mn = mode
+        elif mode == 'min':
+            mn = np.min(spike)
+        elif mode == 'peak':
+            mn = np.max(spike)
+        elif mode == 'end':
+            mn = spike[-1]
+        elif mode == 'ini':
+            mn = spike[0]
+        elif mode == 'mean':
+            mn = np.mean(spike)
+        else:
+            print("fail")
+            return spike
+            
+        if mn != 0:
+            spike = spike-mn
+    
+    return spike
+
+
+# generate a template from a model at a given firing rate
+def make_single_template(Model, frate):
+    d = Model.predict(frate)
+    return d
+
+"""
+function bounds() - indices for adding a template at a defined position into a frame of length ln
+inputs:
+ln - number of samples in the data window
+n_samples - list of length 2 with number of samples to consider left and right of typical template peak
+pos - index of the current spike under consideration
+outputs:
+start - index in the data window where to start pasting template data
+stop - index in the data window where to stop
+t_start - index in the template where to start taking data from
+t_end - index in the templae where to stop
+"""
+def bounds(ln, n_samples, pos):
+    start = max(int(pos-n_samples[0]), 0)   # start index of data in data window
+    stop = min(int(pos+n_samples[1]), ln)   # stop index of data in data window
+    t_start = max(int(n_samples[0]-pos), 0)   # start index of data taken from template within the template
+    t_stop = t_start+stop-start # stop index of data taken
+    return (start, stop, t_start, t_stop)
+
+"""
+function dist() - calculate the distance between a data trace and a template at a shift
+Inputs:
+d - a data window from the experimental data (centred around a candidate spike)
+t - a template of a candidate spike
+n_samples - list of length 2 with number of samples to consider left and right of typical template peak 
+pos - position of the template to be tested, relative to original candidate spike
+unit - name of the neuron unit considered (for axis label if plotting)
+ax - axis to plot into, no plotting if None
+"""
+def dist(d, t, n_samples, pos, unit=None, ax=None):
+    # Make a template at position pos expressed as index in data window d
+    t2 = np.zeros(len(d))
+    start, stop, t_start, t_stop= bounds(len(d), n_samples, pos)
+    t2[start:stop]= t[t_start:t_stop]   # template shifted and cropped to comparison region
+    # data outside where the template sits is zeroed, so that those
+    # regions are not considered during the comparison
+    d2 = np.zeros(len(d))
+    d2[start:stop]= d[start:stop]   # data cropped to comparison region
+    dst = np.linalg.norm(d2-t2)
+    if ax is not None:
+        ax.plot(d,'.', markersize=1)
+        ax.plot(d2, linewidth=0.7)
+        ax.plot(t2, linewidth=0.7)
+        ax.set_ylim(-1.2, 1.2)
+        lbl = unit + ': d=' if unit is not None else ''
+        ax.set_title(lbl+('%.4f' % (dst/(stop-start))))
+    return dst/(stop-start)
+    #return dst
+
+# calculate the distance between a data trace and a compound template 
+def compound_dist(d, t1, t2, n_samples, pos1, pos2, ax=None):
+    # assemble a compound template with positions pos1 and pos2
+    t = np.zeros(len(d))
+    start1, stop1, t_start1, t_stop1= bounds(len(d), n_samples, pos1)
+    t[start1:stop1] += t1[t_start1:t_stop1]
+    start2, stop2, t_start2, t_stop2= bounds(len(d), n_samples, pos2)
+    t[start2:stop2] += t2[t_start2:t_stop2]
+    # blank out data left and right of compound template
+    # NOTE: we are not blanking between templates if there is a gap
+    # This is deliberate; such cases get thus penalized - they should
+    # be treated as individual spikes
+    d2 = np.zeros(len(d))
+    start_l = min(start1,start2)
+    stop_r = max(stop1,stop2)
+    d2[start_l:stop_r] = d[start_l:stop_r]
+    dst = np.linalg.norm(d2-t)
+    if ax is not None:
+        ax.plot(d,'.', markersize=1)
+        ax.plot(d2, linewidth=0.7)
+        ax.plot(t, linewidth=0.7)
+        ax.set_ylim(-1.2,1.2)
+        lbl = 'A+B: d=' if pos1 <= pos2 else 'B+A: d='
+        ax.set_title(lbl + ('%.4f' % (dst/(stop_r-start_l))))
+    return dst/(stop_r-start_l)
+    #return dst 
+
+# Populate block anotates spike trains in the segment and add 2 spike trains with each unit.
+def populate_block(Blk, SpikeInfo, unit_column, units):
+    for i, seg in enumerate(Blk.segments):
+        spike_labels = SpikeInfo.groupby(('segment')).get_group((i))[unit_column].values
+        seg.spiketrains[0].annotations['unit_labels'] = list(spike_labels)
+
+        # make spiketrains
+        St = seg.spiketrains[0]
+        spike_labels = St.annotations['unit_labels']
+        sts = [St]
+
+        for unit in units:
+            times = St.times[sp.array(spike_labels) == unit]
+            st = neo.core.SpikeTrain(times, t_start = St.t_start, t_stop=St.t_stop)
+            st.annotate(unit=unit)
+            sts.append(st)
+        seg.spiketrains=sts
+
+    return Blk
