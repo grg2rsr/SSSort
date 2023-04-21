@@ -25,7 +25,7 @@ import elephant as ele
 # own
 from functions import *
 from plotters import *
-from postprocessing_functions import *
+from functions_post_processing import *
 from sssio import *
 
 # from superpos_functions import *
