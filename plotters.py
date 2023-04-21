@@ -120,6 +120,57 @@ def plot_templates(Templates, SpikeInfo, dt, unit_column=None, unit_order=None, 
 
     return fig, axes
 
+def plot_compare_templates(Templates, SpikeInfo, dt, units, unit_order=None, N=100, save=None, colors=None):
+    """ plots all templates """
+
+    unit_columns = [col for col in SpikeInfo.columns if col.startswith('unit_')]
+    all_units = get_units(SpikeInfo, unit_columns[-1])
+
+    if colors is None:
+        colors = get_colors(all_units)
+
+    tvec = np.arange(-1*Templates.shape[0]*dt//2, Templates.shape[0]*dt//2, dt)
+
+    fig, axes = plt.subplots(ncols=3, sharey=True,  figsize=[3,2])
+
+    avgs = {}
+    for i, unit in enumerate(units):
+        try:
+            ix = SpikeInfo.groupby([unit_columns[-1],'good']).get_group((unit,True))['id']
+            if N is not None and ix.shape[0] > N:
+                ix = ix.sample(N)
+            T = Templates[:,ix]
+            axes[i].plot(tvec, T, color=colors[unit],alpha=0.5,lw=1)
+
+            avgs[unit] = np.average(T, axis=1)
+        except:
+            pass
+
+        try:
+            ix = SpikeInfo.groupby([unit_columns[-1],'good']).get_group((unit,False))['id']
+            if N is not None and ix.shape[0] > N:
+                ix = ix.sample(N)
+            T = Templates[:,ix]
+            axes[i].plot(tvec, T, color='k',alpha=0.5,lw=1,zorder=-1)
+
+            avgs[unit] = np.average(T, axis=1)
+        except:
+            pass
+        
+        axes[i].set_title(unit)
+        axes[i].set_xlabel('time (ms)')
+    
+    for unit in units:
+        axes[2].plot(tvec, avgs[unit], color=colors[unit],alpha=0.5,lw=1)
+
+    sns.despine()
+    fig.tight_layout()
+    if save is not None:
+        fig.savefig(save)
+        plt.close(fig)
+
+    return fig, axes
+
 def plot_segment(Seg, units, sigma=0.05, zscore=False, save=None, colors=None):
     """ inspect plots a segment """
     if colors is None:
@@ -133,7 +184,7 @@ def plot_segment(Seg, units, sigma=0.05, zscore=False, save=None, colors=None):
             axes[0].plot([t,t],[i-0.4, i+0.4], color=colors[unit])
         tvec = sp.linspace(asig.times.magnitude[0], asig.times.magnitude[-1], 1000)
         fr = est_rate(St.times.magnitude, tvec, sigma)
-        if zscore:
+        if zscore: # FIXME TypeError: The input must be a list of AnalogSignal
             fr = ele.signal_processing.zscore(fr)
         axes[1].plot(tvec,fr,color=colors[unit])
 
@@ -248,7 +299,7 @@ def plot_clustering(Templates, SpikeInfo, unit_column, n_components=5, N=300, sa
     pca = PCA(n_components=n_components)
     X = pca.fit_transform(Templates.T)
 
-    fig, axes = plt.subplots(figsize=[8,8], nrows=n_components, ncols=n_components,sharex=True,sharey=True)
+    fig, axes = plt.subplots(figsize=[7,7], nrows=n_components, ncols=n_components,sharex=True,sharey=True)
 
     for unit in units:
         ix = sp.where(spike_labels == unit)[0]
@@ -338,7 +389,9 @@ def plot_fitted_spikes_offline(Segment, j, Models, SpikeInfo, unit_column, wsize
         inds = inds - offset
 
         # try:
-        frates = SpikeInfo.groupby([unit_column, 'segment']).get_group((int(unit),j))['frate_fast'].values
+        from_self = "frate_from_"+unit
+        frates = SpikeInfo.groupby([unit_column, 'segment']).get_group((int(unit),j))[from_self].values
+        # frates = SpikeInfo.groupby([unit_column, 'segment']).get_group((int(unit),j))['frate_fast'].values
         pred_spikes = [Models[unit].predict(f) for f in frates]
 
         for i, spike in enumerate(pred_spikes):
@@ -364,3 +417,4 @@ def plot_fitted_spikes_offline(Segment, j, Models, SpikeInfo, unit_column, wsize
         plt.close(fig)
 
     return fig, axes
+

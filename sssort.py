@@ -301,6 +301,8 @@ its = Config.getint('spike sort','iterations')
 it_merge = Config.getint('spike sort','it_merge')
 first_merge = Config.getint('spike sort','first_merge')
 clust_alpha = Config.getfloat('spike sort','clust_alpha')
+n_clust_final = Config.getint('spike sort','n_clust_final')
+
 units = get_units(SpikeInfo, 'unit_0')
 n_units = len(units)
 penalty = Config.getfloat('spike sort','penalty')
@@ -370,6 +372,11 @@ for it in range(1,its):
     # print iteration info
     print_msg("It:%i - Rss sum: %.3e - # reassigned spikes: %s" % (it, Rss_sum, n_changes))
 
+    # exit condition if n_clusters is reached
+    if len(get_units(SpikeInfo, this_unit_col, remove_unassinged=True)) == n_clust_final:
+        print_msg("aborting training loop, desired number of %i clusters reached" % n_clust_final)
+        break
+
 print_msg("algorithm run is done")
 
 """
@@ -383,6 +390,9 @@ print_msg("algorithm run is done")
  ##       #### ##    ## ####  ######  ##     ## 
  
 """
+
+# final calculation of frate fast
+calc_update_frates(Blk.segments, SpikeInfo, prev_unit_col, kernel_fast, kernel_slow)
 
 last_unit_col = [col for col in SpikeInfo.columns if col.startswith('unit')][-1]
 
@@ -398,10 +408,9 @@ plot_clustering(Templates, SpikeInfo, last_unit_col, save=outpath)
 
 # update spike labels
 kernel = ele.kernels.GaussianKernel(sigma=kernel_fast * pq.s)
-it = its-1 # the last
 
 for i, seg in tqdm(enumerate(Blk.segments),desc="populating block for output"):
-    spike_labels = SpikeInfo.groupby(('segment')).get_group((i))['unit_%i' % it].values
+    spike_labels = SpikeInfo.groupby(('segment')).get_group((i))[last_unit_col].values
     SpikeTrain, = select_by_dict(seg.spiketrains, kind='all_spikes')
     SpikeTrain.annotations['unit_labels'] = list(spike_labels)
 
@@ -500,11 +509,10 @@ for j, Seg in enumerate(Blk.segments):
 
 # plot all sorted spikes
 zoom = np.array(Config.get('output','zoom').split(','),dtype='float32') / 1000
-unit_column = 'unit_%i' % it
 for j, Seg in enumerate(Blk.segments):
     seg_name = Path(Seg.annotations['filename']).stem
     outpath = plots_folder / (seg_name + '_fitted_spikes' + fig_format)
-    plot_fitted_spikes(Seg, j, Models, SpikeInfo, unit_column, zoom=zoom, save=outpath)
+    plot_fitted_spikes(Seg, j, Models, SpikeInfo, last_unit_col, zoom=zoom, save=outpath)
 
 print_msg("plotting done")
 print_msg("all done - quitting")

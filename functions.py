@@ -385,6 +385,40 @@ def Rss(X,Y):
     """ sum of squared residuals """
     return np.sum((X-Y)**2) / X.shape[0]
 
+# def Score_spikes(Templates, SpikeInfo, unit_column, Models, score_metric=Rss, penalty=0.1):
+#     """ Score all spikes using Models """
+
+#     spike_ids = SpikeInfo['id'].values
+
+#     units = get_units(SpikeInfo, unit_column)
+#     n_units = len(units)
+
+#     n_spikes = spike_ids.shape[0]
+#     Scores = np.zeros((n_spikes,n_units))
+#     Rates = np.zeros((n_spikes,n_units))
+
+#     for i, spike_id in enumerate(spike_ids):
+#         Rates[i,:] = [SpikeInfo.loc[spike_id,'frate_from_%s' % unit] for unit in units]
+#         spike = Templates[:, spike_id]
+
+#         for j, unit in enumerate(units):
+#             # get the corresponding rate
+#             rate = Rates[i,j]
+
+#             # the simulated data
+#             spike_pred = Models[unit].predict(rate)
+#             Scores[i,j] = score_metric(spike, spike_pred)
+
+#     Scores[np.isnan(Scores)] = np.inf
+    
+#     # penalty adjust
+#     unit_inds = [units.index(i) if (i != '-1')  else -1 for i in SpikeInfo[unit_column].values]
+#     for i, ui in enumerate(unit_inds):
+#         if ui != -1:
+#             Scores[i,ui] = Scores[i,ui] * (1+penalty)
+            
+#     return Scores, units
+
 def Score_spikes(Templates, SpikeInfo, unit_column, Models, score_metric=Rss, penalty=0.1):
     """ Score all spikes using Models """
 
@@ -394,8 +428,8 @@ def Score_spikes(Templates, SpikeInfo, unit_column, Models, score_metric=Rss, pe
     n_units = len(units)
 
     n_spikes = spike_ids.shape[0]
-    Scores = np.zeros((n_spikes,n_units))
-    Rates = np.zeros((n_spikes,n_units))
+    Scores = sp.zeros((n_spikes,n_units))
+    Rates = sp.zeros((n_spikes,n_units))
 
     for i, spike_id in enumerate(spike_ids):
         Rates[i,:] = [SpikeInfo.loc[spike_id,'frate_from_%s' % unit] for unit in units]
@@ -409,13 +443,15 @@ def Score_spikes(Templates, SpikeInfo, unit_column, Models, score_metric=Rss, pe
             spike_pred = Models[unit].predict(rate)
             Scores[i,j] = score_metric(spike, spike_pred)
 
-    Scores[np.isnan(Scores)] = np.inf
+            # penalty adjust
+            if int(unit) != SpikeInfo.loc[spike_id, unit_column]:
+                Scores[i,j] = Scores[i,j] * (1+penalty)
+
+    Scores[sp.isnan(Scores)] = sp.inf
     
-    # penalty adjust
-    unit_inds = [units.index(i) if (i != '-1')  else -1 for i in SpikeInfo[unit_column].values]
-    for i, ui in enumerate(unit_inds):
-        if ui != -1:
-            Scores[i,ui] = Scores[i,ui] * (1+penalty)
+    # extra penalty for "trash cluster"
+    trash_ix = np.argmin([np.max(Models[u].predict(1)) for u in units])
+    Scores[:,trash_ix] = Scores[:,trash_ix] * 4
             
     return Scores, units
 
@@ -463,18 +499,16 @@ def best_merge(Avgs, Sds, units, alpha=1):
     for i in range(Avgs.shape[0]):
         Q[i,i] = Avgs[i,i] + alpha * Sds[i,i]
 
-    try:
-        merge_candidates = list(zip(np.arange(Q.shape[0]),np.argmin(Q,1)))
-        # remove self
-        for i in range(Q.shape[0]):
-            try:
-                merge_candidates.remove((i,i))
-            except ValueError:
-                pass
+    merge_candidates = list(zip(np.arange(Q.shape[0]),np.argmin(Q,1)))
+    for i in range(Q.shape[0]):
+        if (i,i) in merge_candidates:
+            merge_candidates.remove((i,i))
+
+    if len(merge_candidates) > 0:
         min_ix = np.argmin([Q[c] for c in merge_candidates])
         pair = merge_candidates[min_ix]
-        merge =  [units[pair[0]],units[pair[1]]]
-    except:
-        merge = []
+        merge = [units[pair[0]],units[pair[1]]]
+    else:
+         merge = []
 
     return merge

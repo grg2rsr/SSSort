@@ -42,7 +42,7 @@ def smr2seg(path):
     return segment
 
 
-def list2blk(path):
+def list2blk(path, verbose=True):
     """ convenience function for reading a file containing file paths to recordings per line into a neo block """
 
     with open(path, 'r') as fH:
@@ -50,7 +50,7 @@ def list2blk(path):
 
     Segments = []
     for fname in fnames:
-        print_msg("reading file %s" %fname, log=False)
+        if verbose: print_msg("reading file %s" %fname, log=False)
         fmt = os.path.splitext(fname)[1].lower()
         if fmt=='.asc':
             segment = asc2seg(fname)
@@ -72,29 +72,29 @@ def list2blk(path):
 
     return Blk
 
-def seg2dill(Seg, path):
+def seg2dill(Seg, path, verbose=True):
     """ dumps a seg via dill"""
     with open(path, 'wb') as fH:
-        print_msg("dumping neo.segment to %s" % path)
+        if verbose: print_msg("dumping neo.segment to %s" % path)
         dill.dump(Seg, fH)
 
-def dill2seg(path):
+def dill2seg(path, verbose=True):
     """ dumps a seg via dill"""
     with open(path, 'rb') as fH:
-        print_msg("reading neo.segment from %s" % path)
+        if verbose: print_msg("reading neo.segment from %s" % path)
         Seg = dill.load(fH)
     return Seg
 
-def dill2blk(path):
+def dill2blk(path, verbose=True):
     with open(path, 'rb') as fH:
-        print_msg("reading neo.block from %s" % path)
+        if verbose: print_msg("reading neo.block from %s" % path)
         Blk = dill.load(fH)
     return Blk
 
-def blk2dill(Blk, path):
+def blk2dill(Blk, path, verbose=True):
     """ dumps a block via dill"""
     with open(path, 'wb') as fH:
-        print_msg("dumping neo.block to %s" % path)
+        if verbose: print_msg("dumping neo.block to %s" % path)
         dill.dump(Blk, fH)
 
 def get_data(path):
