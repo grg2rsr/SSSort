@@ -100,7 +100,7 @@ def select_by_dict(objs, **selection):
 
 def sort_units(units):
     """ helper to sort units ascendingly according to their number """
-    units = np.array(units,dtype='int32')
+    units = np.array(units, dtype='int32')
     units = np.sort(units).astype('U')
     return list(units)
 
@@ -145,8 +145,8 @@ def MAD(AnalogSignal, keep_units=True):
 
 def spike_detect(AnalogSignal, min_height, min_prom, lowpass_freq=1000*pq.Hz):
 
-    data = AnalogSignal.magnitude.flatten()
-
+    asig = ele.signal_processing.butter(AnalogSignal, lowpass_freq=lowpass_freq)
+    data = asig.magnitude.flatten()
     res = signal.find_peaks(data, height=[min_height, np.inf], prominence=[min_prom, np.inf])
 
     peak_inds = res[0]
@@ -176,7 +176,7 @@ def get_Templates(data, inds, n_samples):
     """ slice windows of n_samples (symmetric) out of data at inds """
     hwsize = np.int32(n_samples/2)
 
-    Templates = np.zeros((n_samples,inds.shape[0]))
+    Templates = np.zeros((n_samples, inds.shape[0]))
     for i, ix in enumerate(inds):
         Templates[:,i] = data[ix-hwsize:ix+hwsize]
 
@@ -286,7 +286,7 @@ def train_Models(SpikeInfo, unit_column, Templates, n_comp=5, verbose=True):
     Models = {}
     for unit in units:
         # get the corresponding spikes - restrict training to good spikes
-        SInfo = SpikeInfo.groupby([unit_column,'good']).get_group((unit,True))
+        SInfo = SpikeInfo.groupby([unit_column, 'good']).get_group((unit, True))
         # data
         ix = SInfo['id']
         T = Templates[:,ix.values]
@@ -315,7 +315,7 @@ def train_Models(SpikeInfo, unit_column, Templates, n_comp=5, verbose=True):
 #     return 1/(sig*np.sqrt(2*np.pi)) * np.exp(-0.5 * ((t-mu)/sig)**2)
 
 def local_frate(t, mu, tau):
-    """ local firing rate - causal alpha kernel with shape parameter tau """
+    """ local firing rate - anit-causal alpha kernel with shape parameter tau """
     y = (1/tau**2)*(t-mu)*np.exp(-(t-mu)/tau)
     y[t < mu] = 0
     return y
@@ -336,7 +336,7 @@ def calc_update_frates(Segments, SpikeInfo, unit_column, kernel_fast, kernel_slo
     for i, seg  in enumerate(Segments):
         for j, from_unit in enumerate(from_units):
             try:
-                SInfo = SpikeInfo.groupby([unit_column,'segment']).get_group((from_unit,i))
+                SInfo = SpikeInfo.groupby([unit_column, 'segment']).get_group((from_unit, i))
 
                 # spike times
                 from_times = SInfo['time'].values
@@ -348,13 +348,15 @@ def calc_update_frates(Segments, SpikeInfo, unit_column, kernel_fast, kernel_slo
                 ix = SInfo['id']
                 SpikeInfo.loc[ix,'frate_fast'] = rate
             except:
+                # FIXME 
+                # either catch defined exception or deal with the special case
                 # can not set it's own rate, when there are no spikes in this segment for this unit
                 pass
 
             # the rates on others
             for k, to_unit in enumerate(to_units):
                 try:
-                    SInfo = SpikeInfo.groupby([unit_column, 'segment']).get_group((to_unit,i))
+                    SInfo = SpikeInfo.groupby([unit_column, 'segment']).get_group((to_unit, i))
 
                     # spike times
                     to_times = SInfo['time'].values
@@ -365,6 +367,8 @@ def calc_update_frates(Segments, SpikeInfo, unit_column, kernel_fast, kernel_slo
                     ix = SInfo['id']
                     SpikeInfo.loc[ix,'frate_from_'+from_unit] = pred_rate
                 except:
+                    # FIXME 
+                    # either catch defined exception or deal with the special case  
                     # similar: when no spikes in this segment, can not set
                     pass
 
@@ -385,41 +389,8 @@ def Rss(X,Y):
     """ sum of squared residuals """
     return np.sum((X-Y)**2) / X.shape[0]
 
-# def Score_spikes(Templates, SpikeInfo, unit_column, Models, score_metric=Rss, penalty=0.1):
-#     """ Score all spikes using Models """
-
-#     spike_ids = SpikeInfo['id'].values
-
-#     units = get_units(SpikeInfo, unit_column)
-#     n_units = len(units)
-
-#     n_spikes = spike_ids.shape[0]
-#     Scores = np.zeros((n_spikes,n_units))
-#     Rates = np.zeros((n_spikes,n_units))
-
-#     for i, spike_id in enumerate(spike_ids):
-#         Rates[i,:] = [SpikeInfo.loc[spike_id,'frate_from_%s' % unit] for unit in units]
-#         spike = Templates[:, spike_id]
-
-#         for j, unit in enumerate(units):
-#             # get the corresponding rate
-#             rate = Rates[i,j]
-
-#             # the simulated data
-#             spike_pred = Models[unit].predict(rate)
-#             Scores[i,j] = score_metric(spike, spike_pred)
-
-#     Scores[np.isnan(Scores)] = np.inf
-    
-#     # penalty adjust
-#     unit_inds = [units.index(i) if (i != '-1')  else -1 for i in SpikeInfo[unit_column].values]
-#     for i, ui in enumerate(unit_inds):
-#         if ui != -1:
-#             Scores[i,ui] = Scores[i,ui] * (1+penalty)
-            
-#     return Scores, units
-
-def Score_spikes(Templates, SpikeInfo, unit_column, Models, score_metric=Rss, penalty=0.1):
+def Score_spikes(Templates, SpikeInfo, unit_column, Models, score_metric=Rss,
+                 reassign_penalty=0, noise_penalty=0):
     """ Score all spikes using Models """
 
     spike_ids = SpikeInfo['id'].values
@@ -428,11 +399,11 @@ def Score_spikes(Templates, SpikeInfo, unit_column, Models, score_metric=Rss, pe
     n_units = len(units)
 
     n_spikes = spike_ids.shape[0]
-    Scores = sp.zeros((n_spikes,n_units))
-    Rates = sp.zeros((n_spikes,n_units))
+    Scores = sp.zeros((n_spikes, n_units))
+    Rates = sp.zeros((n_spikes, n_units))
 
     for i, spike_id in enumerate(spike_ids):
-        Rates[i,:] = [SpikeInfo.loc[spike_id,'frate_from_%s' % unit] for unit in units]
+        Rates[i,:] = [SpikeInfo.loc[spike_id, 'frate_from_%s' % unit] for unit in units]
         spike = Templates[:, spike_id]
 
         for j, unit in enumerate(units):
@@ -445,13 +416,13 @@ def Score_spikes(Templates, SpikeInfo, unit_column, Models, score_metric=Rss, pe
 
             # penalty adjust
             if int(unit) != SpikeInfo.loc[spike_id, unit_column]:
-                Scores[i,j] = Scores[i,j] * (1+penalty)
+                Scores[i,j] = Scores[i,j] * (1+reassign_penalty)
 
     Scores[sp.isnan(Scores)] = sp.inf
     
     # extra penalty for "trash cluster"
     trash_ix = np.argmin([np.max(Models[u].predict(1)) for u in units])
-    Scores[:,trash_ix] = Scores[:,trash_ix] * 4
+    Scores[:,trash_ix] = Scores[:,trash_ix] * (1+noise_penalty)
             
     return Scores, units
 
@@ -474,8 +445,8 @@ def calculate_pairwise_distances(Templates, SpikeInfo, unit_column, n_comp=5):
     units = get_units(SpikeInfo, unit_column)
     n_units = len(units)
 
-    Avgs = np.zeros((n_units,n_units))
-    Sds = np.zeros((n_units,n_units))
+    Avgs = np.zeros((n_units, n_units))
+    Sds = np.zeros((n_units, n_units))
     
     pca = PCA(n_components=n_comp)
     X = pca.fit_transform(Templates.T)
@@ -486,20 +457,22 @@ def calculate_pairwise_distances(Templates, SpikeInfo, unit_column, n_comp=5):
             ix_b = SpikeInfo.groupby([unit_column, 'good']).get_group((unit_b, True))['id']
             T_a = X[ix_a,:]
             T_b = X[ix_b,:]
-            D_pw = metrics.pairwise.euclidean_distances(T_a,T_b)
+            D_pw = metrics.pairwise.euclidean_distances(T_a, T_b)
             Avgs[i,j] = np.average(D_pw)
             Sds[i,j] = np.std(D_pw)
     return Avgs, Sds
 
 def best_merge(Avgs, Sds, units, alpha=1):
     """ merge two units if their average between distance is lower than within distance.
-    SD scaling by factor alpha regulates aggressive vs. conservative merging """
+    SD scaling by factor alpha regulates aggressive vs. conservative merging
+    the larger alpha, the more agressive """
+
     Q = copy.copy(Avgs)
     
     for i in range(Avgs.shape[0]):
         Q[i,i] = Avgs[i,i] + alpha * Sds[i,i]
 
-    merge_candidates = list(zip(np.arange(Q.shape[0]),np.argmin(Q,1)))
+    merge_candidates = list(zip(np.arange(Q.shape[0]), np.argmin(Q,1)))
     for i in range(Q.shape[0]):
         if (i,i) in merge_candidates:
             merge_candidates.remove((i,i))
@@ -507,7 +480,7 @@ def best_merge(Avgs, Sds, units, alpha=1):
     if len(merge_candidates) > 0:
         min_ix = np.argmin([Q[c] for c in merge_candidates])
         pair = merge_candidates[min_ix]
-        merge = [units[pair[0]],units[pair[1]]]
+        merge = [units[pair[0]], units[pair[1]]]
     else:
          merge = []
 

@@ -178,7 +178,7 @@ for j, seg in enumerate(Blk.segments):
 
     templates.append(get_Templates(data, inds, n_samples))
 
-Templates = np.concatenate(templates,axis=1)
+Templates = np.concatenate(templates, axis=1)
 
 # templates to disk
 outpath = results_folder / 'Templates.npy'
@@ -197,11 +197,11 @@ print_msg("saving Templates to %s" % outpath)
  
 """
 
-n_clusters_init = Config.getint('spike sort','init_clusters')
+n_clusters_init = Config.getint('spike sort', 'init_clusters')
 print_msg("initial kmeans with %i clusters" % n_clusters_init)
 
 # initial clustering in the same space as subsequent spikes models
-n_model_comp = Config.getint('spike model','n_model_comp')
+n_model_comp = Config.getint('spike model', 'n_model_comp')
 pca = PCA(n_components=n_model_comp)
 X = pca.fit_transform(Templates.T)
 kmeans_labels = KMeans(n_clusters=n_clusters_init).fit_predict(X)
@@ -223,7 +223,7 @@ SpikeInfo = pd.DataFrame()
 
 # count spikes
 n_spikes = Templates.shape[1]
-SpikeInfo['id'] = np.arange(n_spikes,dtype='int32')
+SpikeInfo['id'] = np.arange(n_spikes, dtype='int32')
 
 # get all spike times
 spike_times = []
@@ -245,7 +245,7 @@ SpikeInfo['segment'] = segment_labels
 SpikeInfo['unit'] = spike_labels
 
 # get clean templates
-n_neighbors = Config.getint('spike model','template_reject')
+n_neighbors = Config.getint('spike model', 'template_reject')
 reject_spikes(Templates, SpikeInfo, 'unit', n_neighbors, verbose=True)
 
 # unassign spikes if unit has too little good spikes
@@ -272,8 +272,8 @@ plot_templates(Templates, SpikeInfo, dt, N=100, save=outpath)
 print_msg('- initializing algorithm: calculating all initial firing rates')
 
 # rate est
-kernel_slow = Config.getfloat('kernels','sigma_slow')
-kernel_fast = Config.getfloat('kernels','sigma_fast')
+kernel_slow = Config.getfloat('kernels', 'sigma_slow')
+kernel_fast = Config.getfloat('kernels', 'sigma_fast')
 calc_update_frates(Blk.segments, SpikeInfo, 'unit', kernel_fast, kernel_slow)
 
 # model
@@ -296,21 +296,20 @@ plot_Models(Models, save=outpath)
 
 # reset
 SpikeInfo['unit_0'] = SpikeInfo['unit'] # the init
-
-its = Config.getint('spike sort','iterations')
-it_merge = Config.getint('spike sort','it_merge')
-first_merge = Config.getint('spike sort','first_merge')
-clust_alpha = Config.getfloat('spike sort','clust_alpha')
-n_clust_final = Config.getint('spike sort','n_clust_final')
-
 units = get_units(SpikeInfo, 'unit_0')
 n_units = len(units)
-penalty = Config.getfloat('spike sort','penalty')
-sorting_noise = Config.getfloat('spike sort','f_noise')
+
+its = Config.getint('spike sort', 'iterations')
+it_merge = Config.getint('spike sort', 'it_merge')
+first_merge = Config.getint('spike sort', 'first_merge')
+clust_alpha = Config.getfloat('spike sort', 'clust_alpha')
+n_clust_final = Config.getint('spike sort', 'n_clust_final')
+reassign_penalty = Config.getfloat('spike sort', 'reassign_penalty')
+noise_penalty = Config.getfloat('spike sort', 'noise_penalty')
+sorting_noise = Config.getfloat('spike sort', 'f_noise')
+
 ScoresSum = []
 AICs = []
-
-spike_ids = SpikeInfo['id'].values
 
 for it in range(1,its):
     # unit columns
@@ -328,11 +327,12 @@ for it in range(1,its):
     # Score spikes with models
     if it == its-1: # the last
         penalty = 0
-    Scores, units = Score_spikes(Templates, SpikeInfo, prev_unit_col, Models, score_metric=Rss, penalty=penalty)
+    Scores, units = Score_spikes(Templates, SpikeInfo, prev_unit_col, Models, score_metric=Rss,
+                                 reassign_penalty=reassign_penalty, noise_penalty=noise_penalty)
 
     # assign new labels
     min_ix = np.argmin(Scores, axis=1)
-    new_labels = np.array([units[i] for i in min_ix],dtype='object')
+    new_labels = np.array([units[i] for i in min_ix], dtype='object')
     SpikeInfo[this_unit_col] = new_labels
 
     # clean assignment
@@ -342,13 +342,13 @@ for it in range(1,its):
     # randomly unassign a fraction of spikes
     if it != its-1: # the last
         N = int(n_spikes * sorting_noise)
-        SpikeInfo.loc[SpikeInfo.sample(N).index,this_unit_col] = '-1'
+        SpikeInfo.loc[SpikeInfo.sample(N).index, this_unit_col] = '-1'
     
     # plot templates
     outpath = plots_folder / ("Templates_%s%s" % (this_unit_col, fig_format))
     fs = Blk.segments[0].analogsignals[0].sampling_rate
     dt = (1/fs).rescale(pq.ms).magnitude
-    plot_templates(Templates, SpikeInfo, dt,  this_unit_col, save=outpath)
+    plot_templates(Templates, SpikeInfo, dt, this_unit_col, save=outpath)
 
     # every n iterations, merge
     if (it > first_merge) and (it % it_merge) == 0:
@@ -409,7 +409,7 @@ plot_clustering(Templates, SpikeInfo, last_unit_col, save=outpath)
 # update spike labels
 kernel = ele.kernels.GaussianKernel(sigma=kernel_fast * pq.s)
 
-for i, seg in tqdm(enumerate(Blk.segments),desc="populating block for output"):
+for i, seg in tqdm(enumerate(Blk.segments), desc="populating block for output"):
     spike_labels = SpikeInfo.groupby(('segment')).get_group((i))[last_unit_col].values
     SpikeTrain, = select_by_dict(seg.spiketrains, kind='all_spikes')
     SpikeTrain.annotations['unit_labels'] = list(spike_labels)
@@ -474,20 +474,6 @@ if Config.getboolean('output','csv'):
 
         outpath = results_folder / ("Segment_%s_frates.csv" % seg_name)
         FratesDf.to_csv(outpath)
-            
-        # firing rates - downsampled
-        # tbins = np.arange(0,12.2,0.1)
-        # FratesDf_ds = pd.DataFrame(columns=FratesDf.columns)
-        # for i in range(1,tbins.shape[0]):
-        #     t0 = tbins[i-1]
-        #     t1 = tbins[i]
-        #     ix = np.logical_and(FratesDf['t'] > t0,FratesDf['t'] < t1)
-        #     FratesDf_ds = FratesDf_ds.append(FratesDf.iloc[ix.values].mean(axis=0),ignore_index=True)
-        # FratesDf_ds['t'] = tbins[:-1]
-
-        # outpath = results_folder / ("Segment_%s_frates_downsampled.csv" % seg_name)
-        # FratesDf_ds.to_csv(outpath)
-    
 
 """
  

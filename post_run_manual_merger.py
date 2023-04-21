@@ -122,7 +122,7 @@ clust_alpha = Config.getfloat('spike sort','clust_alpha')
 n_clust_final = Config.getint('spike sort','n_clust_final')
 
 max_it = 20
-illegal_merges = []
+rejected_merges = []
 unit_col = unit_columns[-1]
 n_merge = 0
 n_clust = len(get_units(SpikeInfo, unit_col, remove_unassinged=True))
@@ -137,7 +137,7 @@ while n_clust < n_clust_final or i < max_it:
     Avgs, Sds = calculate_pairwise_distances(Templates, SpikeInfo, unit_col)
     merge = best_merge(Avgs, Sds, units, clust_alpha)
 
-    if len(merge) > 0 and merge not in illegal_merges:
+    if len(merge) > 0 and merge not in rejected_merges:
 
         # show plots for this merge
         colors = get_colors(units)
@@ -162,7 +162,7 @@ while n_clust < n_clust_final or i < max_it:
             unit_col = next_unit_col
         else:
             # if no, add merge to the list of forbidden merges
-            illegal_merges.append(merge)
+            rejected_merges.append(merge)
 
         plt.close('all')
 
