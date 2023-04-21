@@ -517,7 +517,7 @@ def plot_by_unit(ax, st, asig,Models, SpikeInfo, unit_column, unit_order=None, c
             # thrown when no spikes are present in this segment
             pass
 
-def plot_fitted_spikes(Segment, Models, SpikeInfo, unit_column, unit_order=None, zoom=None, box= None, save=None, colors=None, wsize=40, rejs=None, spike_label_interval=0):
+def plot_fitted_spikes_pp(Segment, Models, SpikeInfo, unit_column, unit_order=None, zoom=None, box= None, save=None, colors=None, wsize=40, rejs=None, spike_label_interval=0):
     """ plot to inspect fitted spikes """
     fig, axes = plt.subplots(nrows=2, sharex=True, sharey=True, num=1, clear=True, figsize= [4, 3])
 
@@ -574,7 +574,7 @@ def plot_fitted_spikes(Segment, Models, SpikeInfo, unit_column, unit_order=None,
 
     return fig, axes
 
-def plot_fitted_spikes_complete(seg, Models, SpikeInfo, unit_column,max_window, plots_folder, fig_format, unit_order=None, save=None, colors=None, wsize=40, extension='', plot_function=plot_fitted_spikes, rejs=None, spike_label_interval=0):
+def plot_fitted_spikes_complete(seg, Models, SpikeInfo, unit_column,max_window, plots_folder, fig_format, unit_order=None, save=None, colors=None, wsize=40, extension='', plot_function=plot_fitted_spikes_pp, rejs=None, spike_label_interval=0):
     
     asig = seg.analogsignals[0]
 
