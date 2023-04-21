@@ -192,7 +192,7 @@ kernel_fast = Config.getfloat('kernels','sigma_fast')
 last_unit_col = [col for col in SpikeInfo.columns if col.startswith('unit')][-1]
 
 # final calculation of frate fast
-calc_update_frates(Blk.segments, SpikeInfo, last_unit_col, kernel_fast, kernel_slow)
+calc_update_frates(SpikeInfo, last_unit_col, kernel_fast, kernel_slow)
 
 outpath = plots_folder / ("Clustering" + fig_format)
 plot_clustering(Templates, SpikeInfo, last_unit_col, save=outpath)

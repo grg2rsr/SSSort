@@ -325,19 +325,19 @@ def est_rate(spike_times, eval_times, sig):
     rate = local_frate(eval_times[:,np.newaxis], spike_times[np.newaxis,:], sig).sum(1)
     return rate
 
-def calc_update_frates(Segments, SpikeInfo, unit_column, kernel_fast, kernel_slow):
+def calc_update_frates(SpikeInfo, unit_column, kernel_fast, kernel_slow):
     """ calculate all firing rates for all units, based on unit_column. Updates SpikeInfo """
-    # TODO - mix of new and old syntax - Segments are not needed
     
     from_units = get_units(SpikeInfo, unit_column, remove_unassinged=True)
     to_units = get_units(SpikeInfo, unit_column, remove_unassinged=False)
 
     # estimating firing rate profile for "from unit" and getting the rate at "to unit" timepoints
-    for i, seg  in enumerate(Segments):
-        for j, from_unit in enumerate(from_units):
-            try:
-                SInfo = SpikeInfo.groupby([unit_column, 'segment']).get_group((from_unit, i))
-
+    SIgroups = SpikeInfo.groupby([unit_column, 'segment'])
+    for i in SpikeInfo['segment'].unique():
+        for from_unit in from_units:
+            if (from_unit, i) in SIgroups.groups:
+                SInfo = SIgroups.get_group((from_unit, i))
+            
                 # spike times
                 from_times = SInfo['time'].values
 
@@ -347,16 +347,11 @@ def calc_update_frates(Segments, SpikeInfo, unit_column, kernel_fast, kernel_slo
                 # set
                 ix = SInfo['id']
                 SpikeInfo.loc[ix,'frate_fast'] = rate
-            except:
-                # FIXME 
-                # either catch defined exception or deal with the special case
-                # can not set it's own rate, when there are no spikes in this segment for this unit
-                pass
-
+            
             # the rates on others
-            for k, to_unit in enumerate(to_units):
-                try:
-                    SInfo = SpikeInfo.groupby([unit_column, 'segment']).get_group((to_unit, i))
+            for to_unit in to_units:
+                if (to_unit, i) in SIgroups.groups:
+                    SInfo = SIgroups.get_group((to_unit, i))
 
                     # spike times
                     to_times = SInfo['time'].values
@@ -366,11 +361,6 @@ def calc_update_frates(Segments, SpikeInfo, unit_column, kernel_fast, kernel_slo
 
                     ix = SInfo['id']
                     SpikeInfo.loc[ix,'frate_from_'+from_unit] = pred_rate
-                except:
-                    # FIXME 
-                    # either catch defined exception or deal with the special case  
-                    # similar: when no spikes in this segment, can not set
-                    pass
 
 
 """

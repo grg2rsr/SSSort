@@ -274,7 +274,7 @@ print_msg('- initializing algorithm: calculating all initial firing rates')
 # rate est
 kernel_slow = Config.getfloat('kernels', 'sigma_slow')
 kernel_fast = Config.getfloat('kernels', 'sigma_fast')
-calc_update_frates(Blk.segments, SpikeInfo, 'unit', kernel_fast, kernel_slow)
+calc_update_frates(SpikeInfo, 'unit', kernel_fast, kernel_slow)
 
 # model
 n_model_comp = Config.getint('spike model','n_model_comp')
@@ -317,7 +317,7 @@ for it in range(1,its):
     this_unit_col = 'unit_%i' % it
 
     # update rates
-    calc_update_frates(Blk.segments, SpikeInfo, prev_unit_col, kernel_fast, kernel_slow)
+    calc_update_frates(SpikeInfo, prev_unit_col, kernel_fast, kernel_slow)
 
     # train models with labels from last iteration
     Models = train_Models(SpikeInfo, prev_unit_col, Templates, verbose=False, n_comp=n_model_comp)
@@ -392,7 +392,7 @@ print_msg("algorithm run is done")
 """
 
 # final calculation of frate fast
-calc_update_frates(Blk.segments, SpikeInfo, prev_unit_col, kernel_fast, kernel_slow)
+calc_update_frates(SpikeInfo, prev_unit_col, kernel_fast, kernel_slow)
 
 last_unit_col = [col for col in SpikeInfo.columns if col.startswith('unit')][-1]
 
