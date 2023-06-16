@@ -307,6 +307,8 @@ n_clust_final = Config.getint('spike sort', 'n_clust_final')
 reassign_penalty = Config.getfloat('spike sort', 'reassign_penalty')
 noise_penalty = Config.getfloat('spike sort', 'noise_penalty')
 sorting_noise = Config.getfloat('spike sort', 'f_noise')
+manual_merge = Config.getboolean('spike sort', 'manual_merge')
+rejected_merges = []
 
 ScoresSum = []
 AICs = []
@@ -354,11 +356,36 @@ for it in range(1,its):
     if (it > first_merge) and (it % it_merge) == 0:
         print_msg("check for merges ... ")
         Avgs, Sds = calculate_pairwise_distances(Templates, SpikeInfo, this_unit_col)
-        merge = best_merge(Avgs, Sds, units, clust_alpha)
+        merge = best_merge(Avgs, Sds, units, clust_alpha, exclude=rejected_merges)
+
         if len(merge) > 0:
-            print_msg("merging: " + ' '.join(merge))
-            ix = SpikeInfo.groupby(this_unit_col).get_group(merge[1])['id']
-            SpikeInfo.loc[ix, this_unit_col] = merge[0]
+            if not manual_merge:
+                print_msg("merging: " + ' '.join(merge))
+                ix = SpikeInfo.groupby(this_unit_col).get_group(merge[1])['id']
+                SpikeInfo.loc[ix, this_unit_col] = merge[0]
+            else:
+                # show plots for this merge
+                units = get_units(SpikeInfo, this_unit_col)
+                colors = get_colors(units)
+                for k,v in colors.items():
+                    if k not in [str(m) for m in merge]:
+                        colors[k] = 'gray'
+                plt.ion()
+                fig, axes = plot_clustering(Templates, SpikeInfo, this_unit_col, colors=colors)
+                fig, axes = plot_compare_templates(Templates, SpikeInfo, dt, merge)
+
+                # ask for user input
+                if input("merge %s with %s (Y/N)?" % tuple(merge)).upper() == 'Y':
+                    # the merge
+                    ix = SpikeInfo.groupby(this_unit_col).get_group(merge[1])['id']
+                    SpikeInfo.loc[ix, this_unit_col] = merge[0]
+                else:
+                    # if no, add merge to the list of forbidden merges
+                    rejected_merges.append(merge)
+                    print("rejected merge %s with %s" % tuple(merge))
+
+        plt.close('all')
+        plt.ioff()
 
     # Model eval
     n_changes = np.sum(~(SpikeInfo[this_unit_col] == SpikeInfo[prev_unit_col]).values)
