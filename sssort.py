@@ -334,7 +334,8 @@ for it in range(1,its):
 
     # assign new labels
     min_ix = np.argmin(Scores, axis=1)
-    new_labels = np.array([units[i] for i in min_ix], dtype='object')
+    # new_labels = np.array([units[i] for i in min_ix], dtype='object')
+    new_labels = np.array([units[i] for i in min_ix], dtype='U')
     SpikeInfo[this_unit_col] = new_labels
 
     # clean assignment
@@ -527,6 +528,9 @@ for j, Seg in enumerate(Blk.segments):
     outpath = plots_folder / (seg_name + '_fitted_spikes' + fig_format)
     plot_fitted_spikes(Seg, j, Models, SpikeInfo, last_unit_col, zoom=zoom, save=outpath)
 
+# plot final models
+outpath = plots_folder / (seg_name + '_models_final' + fig_format)
+plot_Models(Models, save=outpath)
 print_msg("plotting done")
 print_msg("all done - quitting")
 

@@ -35,10 +35,12 @@ def raw2seg(path, fs, dtype):
     segment.analogsignals = [Asig]
     return segment
 
-def smr2seg(path):
+def smr2seg(path, index=None):
     reader = neo.io.Spike2IO(path)
     Blk, = reader.read(lazy=False)
     segment = Blk.segments[0]
+    if index is not None:
+        segment.analogsignals = [segment.analogsignals[index]]
     return segment
 
 
@@ -114,5 +116,9 @@ def save_data(Blk, path):
 if __name__ == '__main__':
     """ for command line usage - first argument being path to list file """
     path = Path(sys.argv[1])
-    Blk = list2blk(path)
+    seg = smr2seg(path, index=1)
+    seg.annotate(filename=str(path))
+    Blk = neo.core.Block()
+    Blk.segments = [seg]
     blk2dill(Blk, path.with_suffix('.dill'))
+    # Blk = list2blk(path)
