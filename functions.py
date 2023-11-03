@@ -298,6 +298,16 @@ def train_Models(SpikeInfo, unit_column, Templates, n_comp=5, verbose=True):
     
     return Models
 
+def sort_Models(Models):
+    units = list(Models.keys())
+    amps = [np.max(Models[u].predict(1)) for u in units]
+    order = np.argsort(amps)[::-1] # descending amplitude order
+    from collections import OrderedDict
+    Models_ordered = OrderedDict()
+    for k in order:
+        Models_ordered[units[k]] = Models[units[k]]
+    return Models_ordered
+
 """
  
  ########     ###    ######## ########    ########  ######  ######## #### ##     ##    ###    ######## ####  #######  ##    ## 

@@ -85,29 +85,27 @@ def plot_templates(Templates, SpikeInfo, dt, unit_column=None, unit_order=None, 
     if colors is None:
         colors = get_colors(units)
 
-    tvec = np.arange(-1*Templates.shape[0]*dt//2, Templates.shape[0]*dt//2, dt)
+    tvec = np.arange(-1*Templates.shape[0]*dt/2, Templates.shape[0]*dt/2, dt)
 
     fig, axes = plt.subplots(ncols=len(units), sharey=True,  figsize=[len(units),2])
 
     for i, unit in enumerate(units):
-        try:
-            ix = SpikeInfo.groupby([unit_column,'good']).get_group((unit,True))['id']
-            if N is not None and ix.shape[0] > N:
-                ix = ix.sample(N)
-            T = Templates[:,ix]
-            axes[i].plot(tvec, T, color=colors[unit],alpha=0.5,lw=1)
-        except:
-            pass
+
+        ix = SpikeInfo.groupby([unit_column,'good']).get_group((unit,True))['id']
+        if N is not None and ix.shape[0] > N:
+            ix = ix.sample(N)
+        T = Templates[:,ix]
+        axes[i].plot(tvec, T, color=colors[unit],alpha=0.5,lw=1)
 
         try:
             ix = SpikeInfo.groupby([unit_column,'good']).get_group((unit,False))['id']
             if N is not None and ix.shape[0] > N:
                 ix = ix.sample(N)
             T = Templates[:,ix]
-
-            axes[i].plot(tvec, T, color='k',alpha=0.5,lw=1,zorder=-1)
-        except:
+        except: # no good spikes for this unit
             pass
+
+        axes[i].plot(tvec, T, color='k',alpha=0.5,lw=1,zorder=-1)
         
         axes[i].set_title(unit)
         axes[i].set_xlabel('time (ms)')
@@ -129,7 +127,7 @@ def plot_compare_templates(Templates, SpikeInfo, dt, units, unit_order=None, N=1
     if colors is None:
         colors = get_colors(all_units)
 
-    tvec = np.arange(-1*Templates.shape[0]*dt//2, Templates.shape[0]*dt//2, dt)
+    tvec = np.arange(-1*Templates.shape[0]*dt/2, Templates.shape[0]*dt/2, dt)
 
     fig, axes = plt.subplots(ncols=3, sharey=True,  figsize=[3,2])
 
