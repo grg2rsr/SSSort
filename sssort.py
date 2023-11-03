@@ -308,8 +308,11 @@ reassign_penalty = Config.getfloat('spike sort', 'reassign_penalty')
 noise_penalty = Config.getfloat('spike sort', 'noise_penalty')
 sorting_noise = Config.getfloat('spike sort', 'f_noise')
 manual_merge = Config.getboolean('spike sort', 'manual_merge')
-rejected_merges = []
+dynamic_alpha = Config.getboolean('spike sort', 'dynamic_alpha')
+n_train_it = Config.getint('spike sort', 'n_train_it')
+alpha_incr = Config.getfloat('spike sort', 'alpha_incr')
 
+rejected_merges = []
 ScoresSum = []
 AICs = []
 
@@ -352,6 +355,12 @@ for it in range(1,its):
     fs = Blk.segments[0].analogsignals[0].sampling_rate
     dt = (1/fs).rescale(pq.ms).magnitude
     plot_templates(Templates, SpikeInfo, dt, this_unit_col, save=outpath)
+
+    # change alpha
+    if dynamic_alpha:
+        if it > n_train_it:
+            clust_alpha += alpha_incr
+            print_msg("increasing alpha: %.2f" % clust_alpha)
 
     # every n iterations, merge
     if (it > first_merge) and (it % it_merge) == 0:
