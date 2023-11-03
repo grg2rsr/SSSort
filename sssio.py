@@ -7,7 +7,9 @@ import neo
 import quantities as pq
 
 import numpy as np
-from functions import print_msg
+
+import logging
+logger = logging.getLogger()
 
 def asc2seg(path):
     """ reads an autospike .asc file into neo segment """
@@ -52,7 +54,7 @@ def list2blk(path, verbose=True):
 
     Segments = []
     for fname in fnames:
-        if verbose: print_msg("reading file %s" %fname, log=False)
+        if verbose: logger.info("reading file %s" %fname, log=False)
         fmt = os.path.splitext(fname)[1].lower()
         if fmt=='.asc':
             segment = asc2seg(fname)
@@ -77,26 +79,26 @@ def list2blk(path, verbose=True):
 def seg2dill(Seg, path, verbose=True):
     """ dumps a seg via dill"""
     with open(path, 'wb') as fH:
-        if verbose: print_msg("dumping neo.segment to %s" % path)
+        if verbose: logger.info("dumping neo.segment to %s" % path)
         dill.dump(Seg, fH)
 
 def dill2seg(path, verbose=True):
     """ dumps a seg via dill"""
     with open(path, 'rb') as fH:
-        if verbose: print_msg("reading neo.segment from %s" % path)
+        if verbose: logger.info("reading neo.segment from %s" % path)
         Seg = dill.load(fH)
     return Seg
 
 def dill2blk(path, verbose=True):
     with open(path, 'rb') as fH:
-        if verbose: print_msg("reading neo.block from %s" % path)
+        if verbose: logger.info("reading neo.block from %s" % path)
         Blk = dill.load(fH)
     return Blk
 
 def blk2dill(Blk, path, verbose=True):
     """ dumps a block via dill"""
     with open(path, 'wb') as fH:
-        if verbose: print_msg("dumping neo.block to %s" % path)
+        if verbose: logger.info("dumping neo.block to %s" % path)
         dill.dump(Blk, fH)
 
 def get_data(path):

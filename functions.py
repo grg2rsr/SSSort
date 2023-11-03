@@ -35,6 +35,9 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+import logging
+logger = logging.getLogger()
+
 warnings.filterwarnings("ignore")
 t0 = time.time()
 
@@ -50,35 +53,35 @@ t0 = time.time()
  
 """
 
-def print_msg(msg, log=True):
-    """prints the msg string with elapsed time and current memory usage.
+# def print_msg(msg, log=True):
+#     """prints the msg string with elapsed time and current memory usage.
 
-    Args:
-        msg (str): the string to print
-        log (bool): write the msg to the log as well
+#     Args:
+#         msg (str): the string to print
+#         log (bool): write the msg to the log as well
 
-    """
-    if os.name == 'posix':
-        mem_used = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6
-        # msg = "%s%s\t%s\t%s%s" % (colorama.Fore.CYAN, timestr, memstr, colorama.Fore.GREEN, msg)
-        mem_used = np.around(mem_used, 2)
-        memstr = '('+str(mem_used) + ' GB): '
-        timestr = tp.humantime(np.around(time.time()-t0,2))
-        print(colorama.Fore.CYAN + timestr + '\t' +  memstr + '\t' +
-              colorama.Fore.GREEN + msg)
-        if log:
-            with open('log.log', 'a+') as fH:
-                log_str = timestr + '\t' +  memstr + '\t' + msg + '\n'
-                fH.writelines(log_str)
-    else:
-        timestr = tp.humantime(np.around(time.time()-t0,2))
-        print(colorama.Fore.CYAN + timestr + '\t' +
-              colorama.Fore.GREEN + msg)
-        if log:
-            with open('log.log', 'a+') as fH:
-                log_str = timestr + '\t' + '\t' + msg
-                fH.writelines(log_str)
-    pass
+#     """
+#     if os.name == 'posix':
+#         mem_used = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6
+#         # msg = "%s%s\t%s\t%s%s" % (colorama.Fore.CYAN, timestr, memstr, colorama.Fore.GREEN, msg)
+#         mem_used = np.around(mem_used, 2)
+#         memstr = '('+str(mem_used) + ' GB): '
+#         timestr = tp.humantime(np.around(time.time()-t0,2))
+#         print(colorama.Fore.CYAN + timestr + '\t' +  memstr + '\t' +
+#               colorama.Fore.GREEN + msg)
+#         if log:
+#             with open('log.log', 'a+') as fH:
+#                 log_str = timestr + '\t' +  memstr + '\t' + msg + '\n'
+#                 fH.writelines(log_str)
+#     else:
+#         timestr = tp.humantime(np.around(time.time()-t0,2))
+#         print(colorama.Fore.CYAN + timestr + '\t' +
+#               colorama.Fore.GREEN + msg)
+#         if log:
+#             with open('log.log', 'a+') as fH:
+#                 log_str = timestr + '\t' + '\t' + msg
+#                 fH.writelines(log_str)
+#     pass
 
 def select_by_dict(objs, **selection):
     """
@@ -118,7 +121,7 @@ def unassign_spikes(SpikeInfo, unit_column, min_good=5):
     for unit in units:
         Df = SpikeInfo.groupby(unit_column).get_group(unit)
         if np.sum(Df['good']) < min_good:
-            print_msg("not enough good spikes for unit %s" %unit)
+            logger.warning("not enough good spikes for unit %s" %unit)
             SpikeInfo.loc[Df.index, unit_column] = '-1'
     return SpikeInfo
 
@@ -223,7 +226,7 @@ def reject_spikes(Templates, SpikeInfo, unit_column, n_neighbors=80, verbose=Fal
             n_good = np.sum(good_inds_unit)
             n_bad = np.sum(~good_inds_unit)
             frac = n_good / n_total
-            print_msg("# spikes for unit %s: total:%i \t good/bad:%i,%i \t %.2f" % (unit, n_total, n_good, n_bad, frac))
+            logger.info("# spikes for unit %s: total:%i \t good/bad:%i,%i \t %.2f" % (unit, n_total, n_good, n_bad, frac))
 
 """
  
@@ -279,7 +282,9 @@ def train_Models(SpikeInfo, unit_column, Templates, n_comp=5, verbose=True):
     """ trains models for all units, using labels from given unit_column """
 
     if verbose:
-        print_msg("training model on: " + unit_column)
+        logger.info("verbose for train models is a deprecated keyword")
+
+    logger.debug("training model on: " + unit_column)
 
     units = get_units(SpikeInfo, unit_column)
 

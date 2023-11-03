@@ -37,6 +37,24 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+# logging
+import logging
+log_fmt = "%(asctime)s - %(levelname)s - %(message)s"
+date_fmt = '%Y-%m-%d %H:%M:%S'
+formatter = logging.Formatter(log_fmt, datefmt=date_fmt)
+
+# for printing to stdout
+logger = logging.getLogger(__name__)
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(formatter)
+logger.addHandler(stream_handler)
+logger.setLevel(logging.DEBUG)
+
+# logging unhandled exceptions
+def handle_unhandled_exception(exc_type, exc_value, exc_traceback):
+    # TODO make this cleaner that it doesn't use global namespace
+    logging.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback))
+sys.excepthook = handle_unhandled_exception
 
 """
  
@@ -54,7 +72,8 @@ import seaborn as sns
 config_path = Path(os.path.abspath(sys.argv[1]))
 Config = configparser.ConfigParser()
 Config.read(config_path)
-print_msg('config file read from %s' % config_path)
+logger.info('config file read from %s' % config_path)
+# logger.info('config file read from %s' % config_path)
 
 # handling paths and creating output directory
 data_path = Path(Config.get('path','data_path'))
@@ -67,13 +86,18 @@ plots_folder = results_folder / 'plots'
 os.makedirs(plots_folder, exist_ok=True)
 os.chdir(config_path.parent / exp_name)
 
+# config logger for writing to file
+file_handler = logging.FileHandler(filename="logging.log", mode='w')
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+
 # copy config
 shutil.copyfile(config_path, config_path.parent / exp_name / config_path.name)
 
 # read data
 Blk = sssio.get_data(data_path)
 Blk.name = exp_name
-print_msg('data read from %s' % data_path)
+logger.info('data read from %s' % data_path)
 
 # plotting
 mpl.rcParams['figure.dpi'] = Config.get('output','fig_dpi')
@@ -91,19 +115,19 @@ fig_format = Config.get('output','fig_format')
  
 """
 
-print_msg(' - preprocessing - ')
+logger.info(' - preprocessing - ')
 
 for seg in Blk.segments:
     seg.analogsignals[0].annotate(kind='original')
 
 # highpass filter
 freq = Config.getfloat('preprocessing','highpass_freq')
-print_msg("highpass filtering data at %.2f Hz" % freq)
+logger.info("highpass filtering data at %.2f Hz" % freq)
 for seg in Blk.segments:
     seg.analogsignals[0] = ele.signal_processing.butter(seg.analogsignals[0], highpass_freq=freq)
 
 if Config.getboolean('preprocessing','z_score'):
-    print_msg("z-scoring signals")
+    logger.info("z-scoring signals")
     for seg in Blk.segments:
         seg.analogsignals = [ele.signal_processing.zscore(seg.analogsignals)]
 
@@ -119,7 +143,7 @@ if Config.getboolean('preprocessing','z_score'):
 
 """
 
-print_msg('- spike detect - ')
+logger.info(' - spike detect - ')
 
 # global mad
 global_mad = np.average([MAD(seg.analogsignals[0]) for seg in Blk.segments])
@@ -142,7 +166,6 @@ for i, seg in enumerate(Blk.segments):
     st_cut.t_start = st.t_start
     seg.spiketrains.append(st_cut)
 
-
 seg = Blk.segments[0]
 AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
 SpikeTrain, = select_by_dict(seg.spiketrains, kind='all_spikes')
@@ -162,7 +185,7 @@ plot_spike_detect(AnalogSignal, SpikeTrain, 5, w=30*pq.ms, save=outpath)
  
 """
 
-print_msg(' - getting templates - ')
+logger.info(' - getting templates - ')
 
 fs = Blk.segments[0].analogsignals[0].sampling_rate
 n_samples = (wsize * fs).simplified.magnitude.astype('int32')
@@ -183,7 +206,7 @@ Templates = np.concatenate(templates, axis=1)
 # templates to disk
 outpath = results_folder / 'Templates.npy'
 np.save(outpath, Templates)
-print_msg("saving Templates to %s" % outpath)
+logger.info("saving Templates to %s" % outpath)
 
 """
  
@@ -198,7 +221,7 @@ print_msg("saving Templates to %s" % outpath)
 """
 
 n_clusters_init = Config.getint('spike sort', 'init_clusters')
-print_msg("initial kmeans with %i clusters" % n_clusters_init)
+logger.info("initial kmeans with %i clusters" % n_clusters_init)
 
 # initial clustering in the same space as subsequent spikes models
 n_model_comp = Config.getint('spike model', 'n_model_comp')
@@ -269,7 +292,7 @@ plot_templates(Templates, SpikeInfo, dt, N=100, save=outpath)
  
 """
 # first ini run
-print_msg('- initializing algorithm: calculating all initial firing rates')
+logger.info(' - initializing algorithm - ')
 
 # rate est
 kernel_slow = Config.getfloat('kernels', 'sigma_slow')
@@ -278,7 +301,7 @@ calc_update_frates(SpikeInfo, 'unit', kernel_fast, kernel_slow)
 
 # model
 n_model_comp = Config.getint('spike model','n_model_comp')
-Models = train_Models(SpikeInfo, 'unit', Templates, n_comp=n_model_comp, verbose=False)
+Models = train_Models(SpikeInfo, 'unit', Templates, n_comp=n_model_comp)
 outpath = plots_folder / ("Models_ini" + fig_format)
 plot_Models(Models, save=outpath)
 
@@ -325,7 +348,7 @@ for it in range(1,its):
     calc_update_frates(SpikeInfo, prev_unit_col, kernel_fast, kernel_slow)
 
     # train models with labels from last iteration
-    Models = train_Models(SpikeInfo, prev_unit_col, Templates, verbose=False, n_comp=n_model_comp)
+    Models = train_Models(SpikeInfo, prev_unit_col, Templates, n_comp=n_model_comp)
     outpath = plots_folder / ("Models_%s%s" % (prev_unit_col, fig_format))
     plot_Models(Models, save=outpath)
 
@@ -360,17 +383,17 @@ for it in range(1,its):
     if dynamic_alpha:
         if it > n_train_it:
             clust_alpha += alpha_incr
-            print_msg("increasing alpha: %.2f" % clust_alpha)
+            logger.info("increasing alpha: %.2f" % clust_alpha)
 
     # every n iterations, merge
     if (it > first_merge) and (it % it_merge) == 0:
-        print_msg("check for merges ... ")
+        logger.info("check for merges ... ")
         Avgs, Sds = calculate_pairwise_distances(Templates, SpikeInfo, this_unit_col)
         merge = best_merge(Avgs, Sds, units, clust_alpha, exclude=rejected_merges)
 
         if len(merge) > 0:
             if not manual_merge:
-                print_msg("merging: " + ' '.join(merge))
+                logger.info("merging: " + ' '.join(merge))
                 ix = SpikeInfo.groupby(this_unit_col).get_group(merge[1])['id']
                 SpikeInfo.loc[ix, this_unit_col] = merge[0]
             else:
@@ -407,14 +430,14 @@ for it in range(1,its):
     AICs.append(len(units) - 2 * np.log(Rss_sum))
 
     # print iteration info
-    print_msg("It:%i - Rss sum: %.3e - # reassigned spikes: %s" % (it, Rss_sum, n_changes))
+    logger.info("It:%i - Rss sum: %.3e - # reassigned spikes: %s" % (it, Rss_sum, n_changes))
 
     # exit condition if n_clusters is reached
     if len(get_units(SpikeInfo, this_unit_col, remove_unassinged=True)) == n_clust_final:
-        print_msg("aborting training loop, desired number of %i clusters reached" % n_clust_final)
+        logger.info("aborting training loop, desired number of %i clusters reached" % n_clust_final)
         break
 
-print_msg("algorithm run is done")
+logger.info("algorithm run is done")
 
 """
  
@@ -428,6 +451,7 @@ print_msg("algorithm run is done")
  
 """
 
+logger.info(" - saving results - ")
 # final calculation of frate fast
 calc_update_frates(SpikeInfo, prev_unit_col, kernel_fast, kernel_slow)
 
@@ -446,7 +470,7 @@ plot_clustering(Templates, SpikeInfo, last_unit_col, save=outpath)
 # update spike labels
 kernel = ele.kernels.GaussianKernel(sigma=kernel_fast * pq.s)
 
-for i, seg in tqdm(enumerate(Blk.segments), desc="populating block for output"):
+for i, seg in enumerate(Blk.segments):
     spike_labels = SpikeInfo.groupby(('segment')).get_group((i))[last_unit_col].values
     SpikeTrain, = select_by_dict(seg.spiketrains, kind='all_spikes')
     SpikeTrain.annotations['unit_labels'] = list(spike_labels)
@@ -472,25 +496,23 @@ for i, seg in tqdm(enumerate(Blk.segments), desc="populating block for output"):
 
 # store SpikeInfo
 outpath = results_folder / 'SpikeInfo.csv'
-print_msg("saving SpikeInfo to %s" % outpath)
+logger.info("saving SpikeInfo to %s" % outpath)
 SpikeInfo.to_csv(outpath)
 
 # store Block
 outpath = results_folder / 'result.dill'
-print_msg("saving Blk as .dill to %s" % outpath)
+logger.info("saving Blk as .dill to %s" % outpath)
 sssio.blk2dill(Blk, outpath)
 
 # store models
 outpath = results_folder / 'Models.dill'
-print_msg("saving Models as .dill to %s" % outpath)
+logger.info("saving Models as .dill to %s" % outpath)
 with open(outpath, 'wb') as fH:
     dill.dump(Models, fH)
 
-print_msg("data is stored")
-
 # output csv data
 if Config.getboolean('output','csv'):
-    print_msg("writing csv")
+    logger.info("writing csv")
 
     # SpikeTimes
     for i, Seg in enumerate(Blk.segments):
@@ -512,6 +534,7 @@ if Config.getboolean('output','csv'):
         outpath = results_folder / ("Segment_%s_frates.csv" % seg_name)
         FratesDf.to_csv(outpath)
 
+logger.info("all data is stored")
 """
  
  ########  ##        #######  ########    #### ##    ##  ######  ########  ########  ######  ######## 
@@ -523,7 +546,7 @@ if Config.getboolean('output','csv'):
  ##        ########  #######     ##       #### ##    ##  ######  ##        ########  ######     ##    
  
 """
-
+logger.info(" - making diagnostic plots - ")
 # plot all sorted spikes
 for j, Seg in enumerate(Blk.segments):
     seg_name = Path(Seg.annotations['filename']).stem
@@ -540,7 +563,8 @@ for j, Seg in enumerate(Blk.segments):
 # plot final models
 outpath = plots_folder / (seg_name + '_models_final' + fig_format)
 plot_Models(Models, save=outpath)
-print_msg("plotting done")
-print_msg("all done - quitting")
+logger.info("all plotting done")
 
+
+logger.info("all done - quitting")
 sys.exit()
