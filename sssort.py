@@ -19,32 +19,27 @@ from sklearn.decomposition import PCA
 import neo
 import elephant as ele
 
-# own
-from functions import *
-from plotters import *
-import sssio
-
-# banner
-if os.name == "posix":
-    tp.banner("This is SSSort v1.0.0", 78)
-    tp.banner("author: Georg Raiser - grg2rsr@gmail.com", 78)
-else:
-    print("This is SSSort v1.0.0")
-    print("author: Georg Raiser - grg2rsr@gmail.com")
-
 # plotting
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+# own
+from functions import *
+from plotters import *
+import sssio
+
 # logging
 import logging
+
 log_fmt = "%(asctime)s - %(levelname)s - %(message)s"
 date_fmt = '%Y-%m-%d %H:%M:%S'
 formatter = logging.Formatter(log_fmt, datefmt=date_fmt)
 
 # for printing to stdout
-logger = logging.getLogger(__name__)
+logger = logging.getLogger() # get all loggers
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
+logging.getLogger('functions').setLevel(logging.INFO)
 stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
@@ -55,6 +50,14 @@ def handle_unhandled_exception(exc_type, exc_value, exc_traceback):
     # TODO make this cleaner that it doesn't use global namespace
     logging.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback))
 sys.excepthook = handle_unhandled_exception
+
+# banner
+# if os.name == "posix":
+#     tp.banner("This is SSSort v1.0.0", 78)
+#     tp.banner("author: Georg Raiser - grg2rsr@gmail.com", 78)
+# else:
+#     print("This is SSSort v1.0.0")
+#     print("author: Georg Raiser - grg2rsr@gmail.com")
 
 """
  
@@ -69,11 +72,11 @@ sys.excepthook = handle_unhandled_exception
 """
 
 # get config
-config_path = Path(os.path.abspath(sys.argv[1]))
+# config_path = Path(os.path.abspath(sys.argv[1]))
+config_path = Path("/home/georg/code/SSSort/example_config_testing_termin_criteria.ini")
 Config = configparser.ConfigParser()
 Config.read(config_path)
 logger.info('config file read from %s' % config_path)
-# logger.info('config file read from %s' % config_path)
 
 # handling paths and creating output directory
 data_path = Path(Config.get('path','data_path'))
@@ -87,9 +90,11 @@ os.makedirs(plots_folder, exist_ok=True)
 os.chdir(config_path.parent / exp_name)
 
 # config logger for writing to file
-file_handler = logging.FileHandler(filename="logging.log", mode='w')
+file_handler = logging.FileHandler(filename="%s.log" % exp_name, mode='w')
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
+
+logger.info('config file read from %s' % config_path)
 
 # copy config
 shutil.copyfile(config_path, config_path.parent / exp_name / config_path.name)
@@ -98,6 +103,10 @@ shutil.copyfile(config_path, config_path.parent / exp_name / config_path.name)
 Blk = sssio.get_data(data_path)
 Blk.name = exp_name
 logger.info('data read from %s' % data_path)
+
+# get data properies
+fs = Blk.segments[0].analogsignals[0].sampling_rate
+dt = (1/fs).rescale(pq.s)
 
 # plotting
 mpl.rcParams['figure.dpi'] = Config.get('output','fig_dpi')
@@ -131,6 +140,7 @@ if Config.getboolean('preprocessing','z_score'):
     for seg in Blk.segments:
         seg.analogsignals = [ele.signal_processing.zscore(seg.analogsignals)]
 
+
 """
  
   ######  ########  #### ##    ## ########    ########  ######## ######## ########  ######  ######## 
@@ -158,6 +168,7 @@ for i, seg in enumerate(Blk.segments):
     if Config.get('spike detect','peak_mode') == 'negative':
         AnalogSignal *= -1
 
+    # spike detection
     st = spike_detect(AnalogSignal, global_mad*mad_thresh, min_prominence)
     st.annotate(kind='all_spikes')
 
@@ -165,6 +176,9 @@ for i, seg in enumerate(Blk.segments):
     st_cut = st.time_slice(st.t_start + wsize/2, st.t_stop - wsize/2)
     st_cut.t_start = st.t_start
     seg.spiketrains.append(st_cut)
+
+n_spikes = np.sum([seg.spiketrains[0].shape[0] for seg in Blk.segments])
+logger.info("total number of detected spikes: %i" % n_spikes)
 
 seg = Blk.segments[0]
 AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
@@ -227,8 +241,7 @@ logger.info("initial kmeans with %i clusters" % n_clusters_init)
 n_model_comp = Config.getint('spike model', 'n_model_comp')
 pca = PCA(n_components=n_model_comp)
 X = pca.fit_transform(Templates.T)
-kmeans_labels = KMeans(n_clusters=n_clusters_init).fit_predict(X)
-spike_labels = kmeans_labels.astype('U')
+spike_labels = KMeans(n_clusters=n_clusters_init).fit_predict(X).astype('U')
 
 """
  
@@ -272,12 +285,12 @@ n_neighbors = Config.getint('spike model', 'template_reject')
 reject_spikes(Templates, SpikeInfo, 'unit', n_neighbors, verbose=True)
 
 # unassign spikes if unit has too little good spikes
-SpikeInfo = unassign_spikes(SpikeInfo, 'unit')
+SpikeInfo = reject_unit(SpikeInfo, 'unit')
 
 outpath = plots_folder / ("templates_init" + fig_format)
-fs = Blk.segments[0].analogsignals[0].sampling_rate
-dt = (1/fs).rescale(pq.ms).magnitude
-plot_templates(Templates, SpikeInfo, dt, N=100, save=outpath)
+# fs = Blk.segments[0].analogsignals[0].sampling_rate
+# dt = (1/fs).rescale(pq.ms).magnitude
+plot_templates(Templates, SpikeInfo, dt.rescale(pq.ms).magnitude, N=100, save=outpath)
 
 
 """
@@ -322,27 +335,35 @@ SpikeInfo['unit_0'] = SpikeInfo['unit'] # the init
 units = get_units(SpikeInfo, 'unit_0')
 n_units = len(units)
 
-its = Config.getint('spike sort', 'iterations')
-it_merge = Config.getint('spike sort', 'it_merge')
-first_merge = Config.getint('spike sort', 'first_merge')
+n_max_iter = Config.getint('spike sort', 'iterations')
 clust_alpha = Config.getfloat('spike sort', 'clust_alpha')
 n_clust_final = Config.getint('spike sort', 'n_clust_final')
 reassign_penalty = Config.getfloat('spike sort', 'reassign_penalty')
 noise_penalty = Config.getfloat('spike sort', 'noise_penalty')
 sorting_noise = Config.getfloat('spike sort', 'f_noise')
 manual_merge = Config.getboolean('spike sort', 'manual_merge')
-dynamic_alpha = Config.getboolean('spike sort', 'dynamic_alpha')
-n_train_it = Config.getint('spike sort', 'n_train_it')
-alpha_incr = Config.getfloat('spike sort', 'alpha_incr')
+conv_crit = Config.getfloat('spike sort', 'conv_crit')
+n_hist = Config.getint('spike sort', 'history_len')
+force_merge = Config.getboolean('spike sort', 'force_merge')
+
+# hardcoded parameters
+alpha_incr = 0.05
+max_alpha = 100
 
 rejected_merges = []
 ScoresSum = []
 AICs = []
 
-for it in range(1,its):
+for it in range(1, n_max_iter):
+
     # unit columns
     prev_unit_col = 'unit_%i' % (it-1)
     this_unit_col = 'unit_%i' % it
+
+    if it > 2:
+        # randomly unassign a fraction of spikes
+        N = int(n_spikes * sorting_noise)
+        SpikeInfo.loc[SpikeInfo.sample(N).index, prev_unit_col] = '-1'
 
     # update rates
     calc_update_frates(SpikeInfo, prev_unit_col, kernel_fast, kernel_slow)
@@ -353,47 +374,59 @@ for it in range(1,its):
     plot_Models(Models, save=outpath)
 
     # Score spikes with models
-    if it == its-1: # the last
-        penalty = 0
     Scores, units = Score_spikes(Templates, SpikeInfo, prev_unit_col, Models, score_metric=Rss,
                                  reassign_penalty=reassign_penalty, noise_penalty=noise_penalty)
 
     # assign new labels
     min_ix = np.argmin(Scores, axis=1)
-    # new_labels = np.array([units[i] for i in min_ix], dtype='object')
-    new_labels = np.array([units[i] for i in min_ix], dtype='U')
-    SpikeInfo[this_unit_col] = new_labels
+    SpikeInfo[this_unit_col] = np.array([units[i] for i in min_ix], dtype='U')
 
     # clean assignment
-    SpikeInfo = unassign_spikes(SpikeInfo, this_unit_col)
-    reject_spikes(Templates, SpikeInfo, this_unit_col)
-
-    # randomly unassign a fraction of spikes
-    if it != its-1: # the last
-        N = int(n_spikes * sorting_noise)
-        SpikeInfo.loc[SpikeInfo.sample(N).index, this_unit_col] = '-1'
+    SpikeInfo = reject_spikes(Templates, SpikeInfo, this_unit_col)
+    SpikeInfo = reject_unit(SpikeInfo, this_unit_col)
     
     # plot templates
     outpath = plots_folder / ("Templates_%s%s" % (this_unit_col, fig_format))
-    fs = Blk.segments[0].analogsignals[0].sampling_rate
-    dt = (1/fs).rescale(pq.ms).magnitude
-    plot_templates(Templates, SpikeInfo, dt, this_unit_col, save=outpath)
+    plot_templates(Templates, SpikeInfo, dt.rescale(pq.ms).magnitude, this_unit_col, save=outpath)
 
-    # change alpha
-    if dynamic_alpha:
-        if it > n_train_it:
-            clust_alpha += alpha_incr
-            logger.info("increasing alpha: %.2f" % clust_alpha)
+    # Model eval
+    valid_ix = np.where(SpikeInfo[this_unit_col] != '-1')[0]
+    Rss_sum = np.sum(np.min(Scores[valid_ix], axis=1)) / valid_ix.shape[0] #Templates.shape[1]
+    ScoresSum.append(Rss_sum)
+    units = get_units(SpikeInfo, this_unit_col)
+    AICs.append(len(units) - 2 * np.log(Rss_sum))
 
-    # every n iterations, merge
-    if (it > first_merge) and (it % it_merge) == 0:
-        logger.info("check for merges ... ")
+    # print iteration info
+    n_changes, _ = get_changes(SpikeInfo, this_unit_col)
+    logger.info("Iteration: %i - Error: %.2e - # reassigned spikes: %s" % (it, Rss_sum, n_changes))
+
+    # logger.info(len(get_units(SpikeInfo, this_unit_col, remove_unassinged=True)))
+
+    if check_convergence(SpikeInfo, it, n_hist, conv_crit): # refactor conv_crit into 'tol'
+
+        logger.info("convergence criterion reached")
+
+        # check for merges - if no merge - exit
+        logger.info("checking for merges")
         Avgs, Sds = calculate_pairwise_distances(Templates, SpikeInfo, this_unit_col)
         merge = best_merge(Avgs, Sds, units, clust_alpha, exclude=rejected_merges)
 
+        if force_merge:# force merge
+            while len(merge) == 0:
+                clust_alpha += alpha_incr
+                logger.info("increasing alpha to: %.2f" % clust_alpha)
+                merge = best_merge(Avgs, Sds, units, clust_alpha, exclude=rejected_merges)
+
+                # bail condition in case all possible merges are rejected manually by the user
+                # an min numer is not reached yet
+                if clust_alpha > max_alpha:
+                    logger.critial("no more good merges, quitting before reaching number of desired clusters")
+                    break
+
         if len(merge) > 0:
+            # do_merge(merge)
             if not manual_merge:
-                logger.info("merging: " + ' '.join(merge))
+                logger.info("automatic merge: %s with %s" % tuple(merge))
                 ix = SpikeInfo.groupby(this_unit_col).get_group(merge[1])['id']
                 SpikeInfo.loc[ix, this_unit_col] = merge[0]
             else:
@@ -412,30 +445,29 @@ for it in range(1,its):
                     # the merge
                     ix = SpikeInfo.groupby(this_unit_col).get_group(merge[1])['id']
                     SpikeInfo.loc[ix, this_unit_col] = merge[0]
+                    logger.info("manually accepted merge: %s with %s" % tuple(merge))
                 else:
                     # if no, add merge to the list of forbidden merges
                     rejected_merges.append(merge)
-                    print("rejected merge %s with %s" % tuple(merge))
+                    logger.info("manually rejected merge: %s with %s" % tuple(merge))
 
-        plt.close('all')
-        plt.ioff()
+                plt.close('all')
+                plt.ioff()
 
-    # Model eval
-    n_changes = np.sum(~(SpikeInfo[this_unit_col] == SpikeInfo[prev_unit_col]).values)
-    valid_ix = np.where(SpikeInfo[this_unit_col] != '-1')[0]
-    
-    Rss_sum = np.sum(np.min(Scores[valid_ix], axis=1)) / Templates.shape[1]
-    ScoresSum.append(Rss_sum)
-    units = get_units(SpikeInfo, this_unit_col)
-    AICs.append(len(units) - 2 * np.log(Rss_sum))
+        else:
+            if not force_merge:
+                logger.info("aborting, no more merges")
+                break
 
-    # print iteration info
-    logger.info("It:%i - Rss sum: %.3e - # reassigned spikes: %s" % (it, Rss_sum, n_changes))
+    if force_merge:
+        if len(get_units(SpikeInfo, this_unit_col, remove_unassinged=True)) == n_clust_final:
+            logger.info("aborting, desired number of %i clusters reached" % n_clust_final)
+            break
 
-    # exit condition if n_clusters is reached
-    if len(get_units(SpikeInfo, this_unit_col, remove_unassinged=True)) == n_clust_final:
-        logger.info("aborting training loop, desired number of %i clusters reached" % n_clust_final)
-        break
+    # if mode == "B":
+    #     if len(get_units(SpikeInfo, this_unit_col, remove_unassinged=True)) == n_clust_final:
+    #         logger.info("aborting, desired number of %i clusters reached" % n_clust_final)
+
 
 logger.info("algorithm run is done")
 
@@ -451,11 +483,30 @@ logger.info("algorithm run is done")
  
 """
 
-logger.info(" - saving results - ")
-# final calculation of frate fast
-calc_update_frates(SpikeInfo, prev_unit_col, kernel_fast, kernel_slow)
+logger.info(" - finishing up - ")
 
 last_unit_col = [col for col in SpikeInfo.columns if col.startswith('unit')][-1]
+final_unit_col = 'unit_%i' % (int(last_unit_col.split('_')[1]) + 1)
+
+# final calculation of frate fast
+calc_update_frates(SpikeInfo, last_unit_col, kernel_fast, kernel_slow)
+
+# final scoring and assingment
+Scores, units = Score_spikes(Templates, SpikeInfo, last_unit_col, Models, score_metric=Rss,
+                                reassign_penalty=reassign_penalty, noise_penalty=noise_penalty)
+
+# assign new labels
+min_ix = np.argmin(Scores, axis=1)
+new_labels = np.array([units[i] for i in min_ix], dtype='U')
+SpikeInfo[final_unit_col] = new_labels
+
+# clean assignment
+SpikeInfo = reject_unit(SpikeInfo, final_unit_col)
+reject_spikes(Templates, SpikeInfo, final_unit_col)
+
+# - algo done - 
+
+logger.info(" - saving results - ")
 
 # plot
 outpath = plots_folder / ("Convergence_Rss" + fig_format)
@@ -465,13 +516,13 @@ outpath = plots_folder / ("Convergence_AIC" + fig_format)
 plot_convergence(AICs, save=outpath)
 
 outpath = plots_folder / ("Clustering" + fig_format)
-plot_clustering(Templates, SpikeInfo, last_unit_col, save=outpath)
+plot_clustering(Templates, SpikeInfo, final_unit_col, save=outpath)
 
 # update spike labels
 kernel = ele.kernels.GaussianKernel(sigma=kernel_fast * pq.s)
 
 for i, seg in enumerate(Blk.segments):
-    spike_labels = SpikeInfo.groupby(('segment')).get_group((i))[last_unit_col].values
+    spike_labels = SpikeInfo.groupby(('segment')).get_group((i))[final_unit_col].values
     SpikeTrain, = select_by_dict(seg.spiketrains, kind='all_spikes')
     SpikeTrain.annotations['unit_labels'] = list(spike_labels)
 
@@ -558,7 +609,7 @@ zoom = np.array(Config.get('output','zoom').split(','),dtype='float32') / 1000
 for j, Seg in enumerate(Blk.segments):
     seg_name = Path(Seg.annotations['filename']).stem
     outpath = plots_folder / (seg_name + '_fitted_spikes' + fig_format)
-    plot_fitted_spikes(Seg, j, Models, SpikeInfo, last_unit_col, zoom=zoom, save=outpath)
+    plot_fitted_spikes(Seg, j, Models, SpikeInfo, final_unit_col, zoom=zoom, save=outpath)
 
 # plot final models
 outpath = plots_folder / (seg_name + '_models_final' + fig_format)
@@ -566,5 +617,5 @@ plot_Models(Models, save=outpath)
 logger.info("all plotting done")
 
 
-logger.info("all done - quitting")
+logger.info("all tasks done - quitting")
 sys.exit()

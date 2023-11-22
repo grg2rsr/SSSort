@@ -36,7 +36,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 import logging
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 warnings.filterwarnings("ignore")
 t0 = time.time()
@@ -53,35 +53,39 @@ t0 = time.time()
  
 """
 
-# def print_msg(msg, log=True):
-#     """prints the msg string with elapsed time and current memory usage.
+def print_msg(msg, log=True):
+    """ for backwards compatibility? """
+    logger.info(msg)
 
-#     Args:
-#         msg (str): the string to print
-#         log (bool): write the msg to the log as well
+    # the old function
+    # """prints the msg string with elapsed time and current memory usage.
 
-#     """
-#     if os.name == 'posix':
-#         mem_used = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6
-#         # msg = "%s%s\t%s\t%s%s" % (colorama.Fore.CYAN, timestr, memstr, colorama.Fore.GREEN, msg)
-#         mem_used = np.around(mem_used, 2)
-#         memstr = '('+str(mem_used) + ' GB): '
-#         timestr = tp.humantime(np.around(time.time()-t0,2))
-#         print(colorama.Fore.CYAN + timestr + '\t' +  memstr + '\t' +
-#               colorama.Fore.GREEN + msg)
-#         if log:
-#             with open('log.log', 'a+') as fH:
-#                 log_str = timestr + '\t' +  memstr + '\t' + msg + '\n'
-#                 fH.writelines(log_str)
-#     else:
-#         timestr = tp.humantime(np.around(time.time()-t0,2))
-#         print(colorama.Fore.CYAN + timestr + '\t' +
-#               colorama.Fore.GREEN + msg)
-#         if log:
-#             with open('log.log', 'a+') as fH:
-#                 log_str = timestr + '\t' + '\t' + msg
-#                 fH.writelines(log_str)
-#     pass
+    # Args:
+    #     msg (str): the string to print
+    #     log (bool): write the msg to the log as well
+
+    # """
+    # if os.name == 'posix':
+    #     mem_used = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6
+    #     # msg = "%s%s\t%s\t%s%s" % (colorama.Fore.CYAN, timestr, memstr, colorama.Fore.GREEN, msg)
+    #     mem_used = np.around(mem_used, 2)
+    #     memstr = '('+str(mem_used) + ' GB): '
+    #     timestr = tp.humantime(np.around(time.time()-t0,2))
+    #     print(colorama.Fore.CYAN + timestr + '\t' +  memstr + '\t' +
+    #           colorama.Fore.GREEN + msg)
+    #     if log:
+    #         with open('log.log', 'a+') as fH:
+    #             log_str = timestr + '\t' +  memstr + '\t' + msg + '\n'
+    #             fH.writelines(log_str)
+    # else:
+    #     timestr = tp.humantime(np.around(time.time()-t0,2))
+    #     print(colorama.Fore.CYAN + timestr + '\t' +
+    #           colorama.Fore.GREEN + msg)
+    #     if log:
+    #         with open('log.log', 'a+') as fH:
+    #             log_str = timestr + '\t' + '\t' + msg
+    #             fH.writelines(log_str)
+    # pass
 
 def select_by_dict(objs, **selection):
     """
@@ -115,16 +119,59 @@ def get_units(SpikeInfo, unit_column, remove_unassinged=True):
             units.remove('-1')
     return sort_units(units)
 
-def unassign_spikes(SpikeInfo, unit_column, min_good=5):
+def reject_unit(SpikeInfo, unit_column, min_good=80):
     """ unassign spikes from unit it unit does not contain enough spikes as samples """
     units = get_units(SpikeInfo, unit_column)
     for unit in units:
         Df = SpikeInfo.groupby(unit_column).get_group(unit)
         if np.sum(Df['good']) < min_good:
-            logger.warning("not enough good spikes for unit %s" %unit)
+            logger.warning("not enough good spikes for unit %s" % unit)
             SpikeInfo.loc[Df.index, unit_column] = '-1'
     return SpikeInfo
 
+def get_changes(SpikeInfo, unit_column):
+    """ returns number of changes, and the detailed Map of 
+    which to which
+    reasoning: if no spikes change cluster - scores have stabilized """
+    this_unit_col = unit_column
+    it = int(this_unit_col.split('_')[1])
+    prev_unit_col = 'unit_%i' % (it-1)
+
+    this_units = SpikeInfo[this_unit_col].values
+    prev_units = SpikeInfo[prev_unit_col].values
+
+    # this_units = get_units(SpikeInfo, this_unit_col)
+    # prev_units = get_units(SpikeInfo, prev_unit_col)
+
+    ix_valid = ~np.logical_or(this_units == '-1', prev_units == '-1')
+    n_changes = np.sum(this_units[ix_valid] != prev_units[ix_valid])
+
+    # higer res
+    # has received spikes from
+    Changes = {}
+    for unit in get_units(SpikeInfo, this_unit_col, remove_unassinged=False):
+        S = SpikeInfo.loc[SpikeInfo[this_unit_col] == unit, prev_unit_col]
+        Changes[unit] = S.value_counts().to_dict()
+
+    return n_changes, Changes
+
+def check_convergence(SpikeInfo, it, hist, conv_crit):
+    # check for convergence/stability
+    if it > hist:
+        f_changes = []
+        # n_spikes = np.sum(SpikeInfo['unit_%i' % it] != -1) # this won't work
+        n_spikes = SpikeInfo.shape[0]
+        
+        for j in range(hist):
+            col = 'unit_%i' % (it-j)
+            f_changes.append(get_changes(SpikeInfo, col)[0] / n_spikes)
+
+        if np.average(f_changes) < conv_crit:
+            return True
+        else:
+            return False
+    else:
+        return False
 
 """
  
@@ -228,6 +275,7 @@ def reject_spikes(Templates, SpikeInfo, unit_column, n_neighbors=80, verbose=Fal
             frac = n_good / n_total
             logger.info("# spikes for unit %s: total:%i \t good/bad:%i,%i \t %.2f" % (unit, n_total, n_good, n_bad, frac))
 
+    return SpikeInfo
 """
  
   ######  ########  #### ##    ## ########    ##     ##  #######  ########  ######## ##       
@@ -282,7 +330,7 @@ def train_Models(SpikeInfo, unit_column, Templates, n_comp=5, verbose=True):
     """ trains models for all units, using labels from given unit_column """
 
     if verbose:
-        logger.info("verbose for train models is a deprecated keyword")
+        logger.debug("verbose for train models is a deprecated keyword")
 
     logger.debug("training model on: " + unit_column)
 
@@ -325,12 +373,14 @@ def sort_Models(Models):
  
 """
 
-# def local_frate1(t, mu, sig):
+# TODO expose this as a choice
+# def local_frate(t, mu, sig):
 #     """ local firing rate - symmetric gaussian kernel with width parameter sig """
 #     return 1/(sig*np.sqrt(2*np.pi)) * np.exp(-0.5 * ((t-mu)/sig)**2)
 
 def local_frate(t, mu, tau):
     """ local firing rate - anit-causal alpha kernel with shape parameter tau """
+    # this causes a lot of numerical warnings
     y = (1/tau**2)*(t-mu)*np.exp(-(t-mu)/tau)
     y[t < mu] = 0
     return y
@@ -468,11 +518,14 @@ def calculate_pairwise_distances(Templates, SpikeInfo, unit_column, n_comp=5):
     return Avgs, Sds
 
 def best_merge(Avgs, Sds, units, alpha=1, exclude=[]):
-    """ merge two units if their average between distance is lower than within distance.
+    """
+    merge two units if their average between distance is lower than within distance.
     SD scaling by factor alpha regulates aggressive vs. conservative merging
     the larger alpha, the more agressive
     
     exclude is a list of rejected merges pairs
+
+    returns proposed merge
     """
 
     Q = copy.copy(Avgs)

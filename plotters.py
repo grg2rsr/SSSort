@@ -27,7 +27,9 @@ def get_colors(units, palette='hls', desat=None, keep=True):
         n_colors = len(units)
     colors = sns.color_palette(palette, n_colors=n_colors, desat=desat)
     # unit_ids = sp.arange(n_colors).astype('U')
-    return dict(zip(units,colors))
+    D = dict(zip(units,colors))
+    D['-1'] = (0.5,0.5,0.5)
+    return D
 
 def plot_Model(Model, max_rate=None, N=5, ax=None):
     """ plots a single model on ax """
