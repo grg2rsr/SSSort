@@ -159,10 +159,10 @@ logger.info(' - spike detect - ')
 global_mad = np.average([MAD(seg.analogsignals[0]) for seg in Blk.segments])
 mad_thresh = Config.getfloat('spike detect', 'amplitude')
 min_prominence = Config.getfloat('spike detect', 'min_prominence')
+if min_prominence == 0:
+    min_prominence = None
 wsize = Config.getfloat('spike detect', 'wsize') * pq.ms
 spike_detect_only = Config.getboolean('spike detect','spike_detect_only')
-
-min_prominence = 5
 
 if spike_detect_only:
     outpath = None
@@ -173,13 +173,6 @@ if spike_detect_only:
     logger.info("only spike detection - press enter to quit")
     input()
     sys.exit()
-
-# outpath = plots_folder / ("spike_detect" + fig_format)
-# plot_spike_detect(AnalogSignal, SpikeTrain, 5, w=30*pq.ms, save=outpath)
-# plt.show()
-# sys.exit()
-
-
 
 for i, seg in enumerate(Blk.segments):
     AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
