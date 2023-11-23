@@ -193,11 +193,20 @@ def MAD(AnalogSignal, keep_units=True):
         mad = mad * AnalogSignal.units
     return mad
 
-def spike_detect(AnalogSignal, min_height, min_prom, lowpass_freq=1000*pq.Hz):
+def spike_detect(AnalogSignal, min_height, min_prominence=None, lowpass_freq=1000*pq.Hz):
 
-    asig = ele.signal_processing.butter(AnalogSignal, lowpass_freq=lowpass_freq)
-    data = asig.magnitude.flatten()
-    res = signal.find_peaks(data, height=[min_height, np.inf], prominence=[min_prom, np.inf])
+    if lowpass_freq is not None:
+        asig = ele.signal_processing.butter(AnalogSignal, lowpass_freq=lowpass_freq)
+        data = asig.magnitude.flatten()
+    else:
+        data = AnalogSignal.magnitude.flatten()
+
+    if min_prominence is not None:
+        prominence = [min_prominence, np.inf]
+    else:
+        prominence = None
+
+    res = signal.find_peaks(data, height=[min_height, np.inf], prominence=prominence)
 
     peak_inds = res[0]
     peak_amps = res[1]['peak_heights'][:, np.newaxis, np.newaxis]  * AnalogSignal.units

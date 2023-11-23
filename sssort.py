@@ -160,6 +160,26 @@ global_mad = np.average([MAD(seg.analogsignals[0]) for seg in Blk.segments])
 mad_thresh = Config.getfloat('spike detect', 'amplitude')
 min_prominence = Config.getfloat('spike detect', 'min_prominence')
 wsize = Config.getfloat('spike detect', 'wsize') * pq.ms
+spike_detect_only = Config.getboolean('spike detect','spike_detect_only')
+
+min_prominence = 5
+
+if spike_detect_only:
+    outpath = None
+    plt.ion()
+    seg = Blk.segments[0]
+    AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
+    plot_spike_detect(AnalogSignal, min_prominence, N=5, w=0.35*pq.s, save=None)
+    logger.info("only spike detection - press enter to quit")
+    input()
+    sys.exit()
+
+# outpath = plots_folder / ("spike_detect" + fig_format)
+# plot_spike_detect(AnalogSignal, SpikeTrain, 5, w=30*pq.ms, save=outpath)
+# plt.show()
+# sys.exit()
+
+
 
 for i, seg in enumerate(Blk.segments):
     AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
@@ -183,9 +203,6 @@ logger.info("total number of detected spikes: %i" % n_spikes)
 seg = Blk.segments[0]
 AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
 SpikeTrain, = select_by_dict(seg.spiketrains, kind='all_spikes')
-
-outpath = plots_folder / ("spike_detect" + fig_format)
-plot_spike_detect(AnalogSignal, SpikeTrain, 5, w=30*pq.ms, save=outpath)
 
 """
  
@@ -320,13 +337,13 @@ plot_Models(Models, save=outpath)
 
 """
  
- ########  ##     ## ##    ## 
- ##     ## ##     ## ###   ## 
- ##     ## ##     ## ####  ## 
- ########  ##     ## ## ## ## 
- ##   ##   ##     ## ##  #### 
- ##    ##  ##     ## ##   ### 
- ##     ##  #######  ##    ## 
+ #### ######## ######## ########     ###    ######## ######## 
+  ##     ##    ##       ##     ##   ## ##      ##    ##       
+  ##     ##    ##       ##     ##  ##   ##     ##    ##       
+  ##     ##    ######   ########  ##     ##    ##    ######   
+  ##     ##    ##       ##   ##   #########    ##    ##       
+  ##     ##    ##       ##    ##  ##     ##    ##    ##       
+ ####    ##    ######## ##     ## ##     ##    ##    ######## 
  
 """
 
@@ -336,15 +353,18 @@ units = get_units(SpikeInfo, 'unit_0')
 n_units = len(units)
 
 n_max_iter = Config.getint('spike sort', 'iterations')
+
+force_merge = Config.getboolean('spike sort', 'force_merge')
+manual_merge = Config.getboolean('spike sort', 'manual_merge')
+
 clust_alpha = Config.getfloat('spike sort', 'clust_alpha')
 n_clust_final = Config.getint('spike sort', 'n_clust_final')
+
 reassign_penalty = Config.getfloat('spike sort', 'reassign_penalty')
 noise_penalty = Config.getfloat('spike sort', 'noise_penalty')
 sorting_noise = Config.getfloat('spike sort', 'f_noise')
-manual_merge = Config.getboolean('spike sort', 'manual_merge')
 conv_crit = Config.getfloat('spike sort', 'conv_crit')
 n_hist = Config.getint('spike sort', 'history_len')
-force_merge = Config.getboolean('spike sort', 'force_merge')
 
 # hardcoded parameters
 alpha_incr = 0.05
@@ -400,8 +420,6 @@ for it in range(1, n_max_iter):
     n_changes, _ = get_changes(SpikeInfo, this_unit_col)
     logger.info("Iteration: %i - Error: %.2e - # reassigned spikes: %s" % (it, Rss_sum, n_changes))
 
-    # logger.info(len(get_units(SpikeInfo, this_unit_col, remove_unassinged=True)))
-
     if check_convergence(SpikeInfo, it, n_hist, conv_crit): # refactor conv_crit into 'tol'
 
         logger.info("convergence criterion reached")
@@ -420,7 +438,7 @@ for it in range(1, n_max_iter):
                 # bail condition in case all possible merges are rejected manually by the user
                 # an min numer is not reached yet
                 if clust_alpha > max_alpha:
-                    logger.critial("no more good merges, quitting before reaching number of desired clusters")
+                    logger.critical("no more good merges, quitting before reaching number of desired clusters")
                     break
 
         if len(merge) > 0:
@@ -438,7 +456,7 @@ for it in range(1, n_max_iter):
                         colors[k] = 'gray'
                 plt.ion()
                 fig, axes = plot_clustering(Templates, SpikeInfo, this_unit_col, colors=colors)
-                fig, axes = plot_compare_templates(Templates, SpikeInfo, dt, merge)
+                fig, axes = plot_compare_templates(Templates, SpikeInfo, this_unit_col, dt, merge)
 
                 # ask for user input
                 if input("merge %s with %s (Y/N)?" % tuple(merge)).upper() == 'Y':
@@ -464,22 +482,15 @@ for it in range(1, n_max_iter):
             logger.info("aborting, desired number of %i clusters reached" % n_clust_final)
             break
 
-    # if mode == "B":
-    #     if len(get_units(SpikeInfo, this_unit_col, remove_unassinged=True)) == n_clust_final:
-    #         logger.info("aborting, desired number of %i clusters reached" % n_clust_final)
-
-
-logger.info("algorithm run is done")
-
 """
  
- ######## #### ##    ## ####  ######  ##     ## 
- ##        ##  ###   ##  ##  ##    ## ##     ## 
- ##        ##  ####  ##  ##  ##       ##     ## 
- ######    ##  ## ## ##  ##   ######  ######### 
- ##        ##  ##  ####  ##        ## ##     ## 
- ##        ##  ##   ###  ##  ##    ## ##     ## 
- ##       #### ##    ## ####  ######  ##     ## 
+ ######## ######## ########  ##     ## #### ##    ##    ###    ######## ######## 
+    ##    ##       ##     ## ###   ###  ##  ###   ##   ## ##      ##    ##       
+    ##    ##       ##     ## #### ####  ##  ####  ##  ##   ##     ##    ##       
+    ##    ######   ########  ## ### ##  ##  ## ## ## ##     ##    ##    ######   
+    ##    ##       ##   ##   ##     ##  ##  ##  #### #########    ##    ##       
+    ##    ##       ##    ##  ##     ##  ##  ##   ### ##     ##    ##    ##       
+    ##    ######## ##     ## ##     ## #### ##    ## ##     ##    ##    ######## 
  
 """
 

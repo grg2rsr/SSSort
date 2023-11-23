@@ -341,31 +341,38 @@ def plot_clustering(Templates, SpikeInfo, unit_column, n_components=5, N=300, sa
 
     return fig, axes
 
-def plot_spike_detect(AnalogSignal, SpikeTrain, N=4, w=50*pq.ms, ylim=(-5,5), save=None):
-    """ makes a NxN grid plot of time snippeds from the AnalogSignal with overlayed
-     detected spikes """
+def plot_spike_detect(AnalogSignal, min_prominence=3, N=4, w=0.2*pq.s, save=None):
+    """ """
+    fig, axes = plt.subplots(nrows=N, sharey=True)
     
-    fig, axes = plt.subplots(ncols=N, nrows=N, sharey=True)
-    axix = np.array(np.unravel_index(range(N**2),(N,N))).T
-
     mad = MAD(AnalogSignal)
 
-    for i in range(N**2):
-        t_start = np.random.rand() * AnalogSignal.times[-1]-w
+    for i in range(N):
+        t_start = np.random.rand() * AnalogSignal.times[-1] - w
         t_stop = t_start + w
-        asig = AnalogSignal.time_slice(t_start, t_stop)
-        st = SpikeTrain.time_slice(t_start, t_stop)
-        axes[*axix[i]].plot(asig.times, asig, color='k', lw=1)
-        for t in st:
-            axes[*axix[i]].axvline(t, color='orange',zorder=-1)
-
-    for ax in axes.flatten():
-        for th in [3,4,5]:
-            ax.axhline(mad*th, color='r', lw=0.5, alpha=1)
-            ax.set_xticklabels([])
-            ax.set_ylim(ylim) # if zscored
         
-    sns.despine(fig)
+        asig = AnalogSignal.time_slice(t_start, t_stop)
+        axes[i].plot(asig.times, asig, color='k', lw=1)
+        axes[i].set_xticks([])
+
+        for th in [3,4,5]:
+            axes[i].axhline(mad*th, color='r', lw=0.5, alpha=1)
+            st = spike_detect(asig, mad.magnitude*th, min_prominence=min_prominence, lowpass_freq=None)
+            for t in st.times:
+                axes[i].plot([t,t],[0,10],color='r', lw=th/5, alpha=1,zorder=1)
+            
+        nasig = neo.AnalogSignal(asig.magnitude * -1, units=asig.units, t_start=asig.t_start, sampling_rate=asig.sampling_rate)
+        for th in [3,4,5]:
+            axes[i].axhline(mad*-th, color='r', lw=0.5, alpha=1)
+            st = spike_detect(nasig, mad.magnitude*th, min_prominence)
+            for t in st.times:
+                axes[i].plot([t,t],[-10,0],color='r', lw=th/5, alpha=1,zorder=1)
+
+    for ax in axes:
+        ax.set_ylim(-5, 5) # if zscored
+        ax.axhline(0, color='gray', lw=0.5, alpha=1,zorder=-1)
+        
+    sns.despine(fig,bottom=True)
     fig.tight_layout()
 
     if save is not None:
