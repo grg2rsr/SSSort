@@ -119,14 +119,11 @@ def plot_templates(Templates, SpikeInfo, dt, unit_column=None, unit_order=None, 
         plt.close(fig)
 
     return fig, axes
-
-def plot_compare_templates(Templates, SpikeInfo, dt, units, unit_order=None, N=100, save=None, colors=None):
-    """ plots all templates """
-
-    unit_columns = [col for col in SpikeInfo.columns if col.startswith('unit_')]
-    all_units = get_units(SpikeInfo, unit_columns[-1])
+def plot_compare_templates(Templates, SpikeInfo, unit_column, dt, units_compare, N=100, save=None, colors=None):
+    """  """
 
     if colors is None:
+        all_units = get_units(SpikeInfo, unit_column)
         colors = get_colors(all_units)
 
     tvec = np.arange(-1*Templates.shape[0]*dt/2, Templates.shape[0]*dt/2, dt)
@@ -134,28 +131,42 @@ def plot_compare_templates(Templates, SpikeInfo, dt, units, unit_order=None, N=1
     fig, axes = plt.subplots(ncols=3, sharey=True,  figsize=[3,2])
 
     avgs = {}
-    for i, unit in enumerate(units):
-        SIgroups = SpikeInfo.groupby([unit_columns[-1],'good'])
+    for i, unit in enumerate(units_compare):
+        
+        # get good spikes for unit
+        SIgroups = SpikeInfo.groupby([unit_column,'good'])
 
         if (unit, True) in SIgroups.groups:
-            ix = SIgroups.get_group((unit,True))['id']
+            group = SIgroups.get_group((unit,True))
+            ix = group['id']
             if N is not None and ix.shape[0] > N:
                 ix = ix.sample(N)
             T = Templates[:,ix]
-            axes[i].plot(tvec, T, color=colors[unit],alpha=0.5,lw=1)
+
+            # color by firing rate
+            frates = group['frate_fast'][ix].values
+            cmap = mpl.cm.inferno
+            norm = mpl.colors.Normalize(vmin=0, vmax=frates.max())
+            cols = cmap(norm(frates))
+            frates_order = np.argsort(frates)            
+
+            for j in range(T.shape[1]):
+                axes[i].plot(tvec, T[:,frates_order[j]], color=cols[frates_order[j]],alpha=0.75,lw=1,zorder=1)
+            # axes[i].plot(tvec, T, color=colors[unit],alpha=0.5,lw=1)
             avgs[unit] = np.average(T, axis=1)
 
+        # get rejected spikes for unit
         if (unit,False) in SIgroups.groups:
-            ix = SpikeInfo.groupby([unit_columns[-1],'good']).get_group((unit,False))['id']
+            ix = SpikeInfo.groupby([unit_column,'good']).get_group((unit,False))['id']
             if N is not None and ix.shape[0] > N:
                 ix = ix.sample(N)
             T = Templates[:,ix]
-            axes[i].plot(tvec, T, color='k',alpha=0.5,lw=1,zorder=-1)
+            axes[i].plot(tvec, T, color='k',alpha=0.5,lw=0.75,zorder=-1)
         
-        axes[i].set_title(unit)
+        axes[i].set_title(unit, color=colors[unit])
         axes[i].set_xlabel('time (ms)')
     
-    for unit in units:
+    for unit in units_compare:
         axes[2].plot(tvec, avgs[unit], color=colors[unit], lw=2, alpha=0.8)
 
     axes[2].set_title('both')
