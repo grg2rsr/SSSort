@@ -119,6 +119,7 @@ def plot_templates(Templates, SpikeInfo, dt, unit_column=None, unit_order=None, 
         plt.close(fig)
 
     return fig, axes
+
 def plot_compare_templates(Templates, SpikeInfo, unit_column, dt, units_compare, N=100, save=None, colors=None):
     """  """
 
@@ -128,7 +129,18 @@ def plot_compare_templates(Templates, SpikeInfo, unit_column, dt, units_compare,
 
     tvec = np.arange(-1*Templates.shape[0]*dt/2, Templates.shape[0]*dt/2, dt)
 
-    fig, axes = plt.subplots(ncols=3, sharey=True,  figsize=[3,2])
+    fig, axes = plt.subplots(ncols=3, sharey=True,  figsize=[6,3])
+
+    # color by firing rate
+    frates_max = []
+    groups = SpikeInfo.groupby([unit_column,'good'])
+    for unit in units_compare:
+        frates_max.append(groups.get_group((unit, True))['frate_fast'].values.max())
+    frate_max = np.array(frates_max).max()
+    print(frates_max)
+    print(frate_max)
+    cmap = mpl.cm.inferno
+    norm = mpl.colors.Normalize(vmin=0, vmax=frate_max)
 
     avgs = {}
     for i, unit in enumerate(units_compare):
@@ -143,10 +155,7 @@ def plot_compare_templates(Templates, SpikeInfo, unit_column, dt, units_compare,
                 ix = ix.sample(N)
             T = Templates[:,ix]
 
-            # color by firing rate
             frates = group['frate_fast'][ix].values
-            cmap = mpl.cm.inferno
-            norm = mpl.colors.Normalize(vmin=0, vmax=frates.max())
             cols = cmap(norm(frates))
             frates_order = np.argsort(frates)            
 
