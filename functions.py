@@ -1,23 +1,14 @@
 # system
-import sys
-import os
-import time
-import copy
-if os.name == 'posix':
-    import resource
+import sys, os, time, copy
 import warnings
-from tqdm import tqdm
-import threading
 
 # sci
-import scipy as sp
 import numpy as np
 from scipy import stats, signal
 import quantities as pq
 import pandas as pd
 
 # ml
-import sklearn
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.decomposition import PCA
 from sklearn import metrics
@@ -25,15 +16,6 @@ from sklearn import metrics
 # ephys
 import neo
 import elephant as ele
-
-# print
-import colorama
-import tableprint as tp
-
-# plotting
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import seaborn as sns
 
 import logging
 logger = logging.getLogger(__name__)
@@ -52,40 +34,6 @@ t0 = time.time()
  ##     ## ######## ######## ##        ######## ##     ##  ######  
  
 """
-
-def print_msg(msg, log=True):
-    """ for backwards compatibility? """
-    logger.info(msg)
-
-    # the old function
-    # """prints the msg string with elapsed time and current memory usage.
-
-    # Args:
-    #     msg (str): the string to print
-    #     log (bool): write the msg to the log as well
-
-    # """
-    # if os.name == 'posix':
-    #     mem_used = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6
-    #     # msg = "%s%s\t%s\t%s%s" % (colorama.Fore.CYAN, timestr, memstr, colorama.Fore.GREEN, msg)
-    #     mem_used = np.around(mem_used, 2)
-    #     memstr = '('+str(mem_used) + ' GB): '
-    #     timestr = tp.humantime(np.around(time.time()-t0,2))
-    #     print(colorama.Fore.CYAN + timestr + '\t' +  memstr + '\t' +
-    #           colorama.Fore.GREEN + msg)
-    #     if log:
-    #         with open('log.log', 'a+') as fH:
-    #             log_str = timestr + '\t' +  memstr + '\t' + msg + '\n'
-    #             fH.writelines(log_str)
-    # else:
-    #     timestr = tp.humantime(np.around(time.time()-t0,2))
-    #     print(colorama.Fore.CYAN + timestr + '\t' +
-    #           colorama.Fore.GREEN + msg)
-    #     if log:
-    #         with open('log.log', 'a+') as fH:
-    #             log_str = timestr + '\t' + '\t' + msg
-    #             fH.writelines(log_str)
-    # pass
 
 def select_by_dict(objs, **selection):
     """
@@ -130,9 +78,9 @@ def reject_unit(SpikeInfo, unit_column, min_good=80):
     return SpikeInfo
 
 def get_changes(SpikeInfo, unit_column):
-    """ returns number of changes, and the detailed Map of 
-    which to which
-    reasoning: if no spikes change cluster - scores have stabilized """
+    """ get the number of spikes that changed cluster from the last it
+     to this it """
+
     this_unit_col = unit_column
     it = int(this_unit_col.split('_')[1])
     prev_unit_col = 'unit_%i' % (it-1)
@@ -140,14 +88,10 @@ def get_changes(SpikeInfo, unit_column):
     this_units = SpikeInfo[this_unit_col].values
     prev_units = SpikeInfo[prev_unit_col].values
 
-    # this_units = get_units(SpikeInfo, this_unit_col)
-    # prev_units = get_units(SpikeInfo, prev_unit_col)
-
     ix_valid = ~np.logical_or(this_units == '-1', prev_units == '-1')
     n_changes = np.sum(this_units[ix_valid] != prev_units[ix_valid])
 
-    # higer res
-    # has received spikes from
+    # has received spikes from?
     Changes = {}
     for unit in get_units(SpikeInfo, this_unit_col, remove_unassinged=False):
         S = SpikeInfo.loc[SpikeInfo[this_unit_col] == unit, prev_unit_col]
@@ -156,7 +100,7 @@ def get_changes(SpikeInfo, unit_column):
     return n_changes, Changes
 
 def check_convergence(SpikeInfo, it, hist, conv_crit):
-    # check for convergence/stability
+    """ returns True if changes have stabilized """
     if it > hist:
         f_changes = []
         # n_spikes = np.sum(SpikeInfo['unit_%i' % it] != -1) # this won't work
@@ -221,13 +165,13 @@ def spike_detect(AnalogSignal, min_height, min_prominence=None, lowpass_freq=100
 
 """
  
- ######## ######## ##     ## ########  ##          ###    ######## ########  ######  
-    ##    ##       ###   ### ##     ## ##         ## ##      ##    ##       ##    ## 
-    ##    ##       #### #### ##     ## ##        ##   ##     ##    ##       ##       
-    ##    ######   ## ### ## ########  ##       ##     ##    ##    ######    ######  
-    ##    ##       ##     ## ##        ##       #########    ##    ##             ## 
-    ##    ##       ##     ## ##        ##       ##     ##    ##    ##       ##    ## 
-    ##    ######## ##     ## ##        ######## ##     ##    ##    ########  ######  
+ ##      ##    ###    ##     ## ######## ########  #######  ########  ##     ##  ######  
+ ##  ##  ##   ## ##   ##     ## ##       ##       ##     ## ##     ## ###   ### ##    ## 
+ ##  ##  ##  ##   ##  ##     ## ##       ##       ##     ## ##     ## #### #### ##       
+ ##  ##  ## ##     ## ##     ## ######   ######   ##     ## ########  ## ### ##  ######  
+ ##  ##  ## #########  ##   ##  ##       ##       ##     ## ##   ##   ##     ##       ## 
+ ##  ##  ## ##     ##   ## ##   ##       ##       ##     ## ##    ##  ##     ## ##    ## 
+  ###  ###  ##     ##    ###    ######## ##        #######  ##     ## ##     ##  ######  
  
 """
 
@@ -326,7 +270,7 @@ class Spike_Model():
         self.pfits = []
         p0 = [0,0]
         for i in range(self.n_comp):
-            pfit = sp.stats.linregress(frates, pca_waveforms[:,i])[:2]
+            pfit = stats.linregress(frates, pca_waveforms[:,i])[:2]
             self.pfits.append(pfit)
 
     def predict(self, fr):
@@ -335,14 +279,9 @@ class Spike_Model():
         pca_i = [lin(fr,*self.pfits[i]) for i in range(len(self.pfits))]
         return self.pca.inverse_transform(pca_i)
 
-def train_Models(SpikeInfo, unit_column, Waveforms, n_comp=5, verbose=True):
+def train_Models(SpikeInfo, unit_column, Waveforms, n_comp=5):
     """ trains models for all units, using labels from given unit_column """
-
-    if verbose:
-        logger.debug("verbose for train models is a deprecated keyword")
-
     logger.debug("training model on: " + unit_column)
-
     units = get_units(SpikeInfo, unit_column)
 
     Models = {}
@@ -382,7 +321,6 @@ def sort_Models(Models):
  
 """
 
-# TODO expose this as a choice
 # def local_frate(t, mu, sig):
 #     """ local firing rate - symmetric gaussian kernel with width parameter sig """
 #     return 1/(sig*np.sqrt(2*np.pi)) * np.exp(-0.5 * ((t-mu)/sig)**2)
@@ -463,8 +401,8 @@ def Score_spikes(Waveforms, SpikeInfo, unit_column, Models, score_metric=Rss,
     n_units = len(units)
 
     n_spikes = spike_ids.shape[0]
-    Scores = sp.zeros((n_spikes, n_units))
-    Rates = sp.zeros((n_spikes, n_units))
+    Scores = np.zeros((n_spikes, n_units))
+    Rates = np.zeros((n_spikes, n_units))
 
     for i, spike_id in enumerate(spike_ids):
         Rates[i,:] = [SpikeInfo.loc[spike_id, 'frate_from_%s' % unit] for unit in units]
@@ -482,7 +420,7 @@ def Score_spikes(Waveforms, SpikeInfo, unit_column, Models, score_metric=Rss,
             if int(unit) != SpikeInfo.loc[spike_id, unit_column]:
                 Scores[i,j] = Scores[i,j] * (1+reassign_penalty)
 
-    Scores[sp.isnan(Scores)] = sp.inf
+    Scores[np.isnan(Scores)] = np.inf
     
     # extra penalty for "trash cluster"
     trash_ix = np.argmin([np.max(Models[u].predict(1)) for u in units])

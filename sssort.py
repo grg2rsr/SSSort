@@ -1,15 +1,10 @@
 # sys
-import sys
-import os
-import copy
+import sys, os, shutil
 import dill
-import shutil
 import configparser
 from pathlib import Path
-from tqdm import tqdm
 
 # sci
-import scipy as sp
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
@@ -22,7 +17,6 @@ import elephant as ele
 # plotting
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import seaborn as sns
 
 # own
 from functions import *
@@ -72,11 +66,13 @@ sys.excepthook = handle_unhandled_exception
 """
 
 # get config
-# config_path = Path(os.path.abspath(sys.argv[1]))
-config_path = Path("/home/georg/code/SSSort/example_config.ini")
+if len(sys.argv) == 1:
+    config_path = Path("/home/georg/code/SSSort/example_config.ini")
+else:
+    config_path = Path(os.path.abspath(sys.argv[1]))
+
 Config = configparser.ConfigParser()
 Config.read(config_path)
-logger.info('config file read from %s' % config_path)
 
 # handling paths and creating output directory
 data_path = Path(Config.get('path','data_path'))
@@ -285,7 +281,7 @@ segment_labels = np.concatenate(segment_labels)
 SpikeInfo['segment'] = segment_labels
 
 # get all labels
-SpikeInfo['unit'] = spike_labels
+SpikeInfo['unit_0'] = spike_labels
 
 # get clean waveforms
 n_neighbors = Config.getint('spike model', 'template_reject')
@@ -334,8 +330,7 @@ plot_waveforms(Waveforms, SpikeInfo, dt.rescale(pq.ms).magnitude, N=100, save=ou
  
 """
 
-# reset
-SpikeInfo['unit_0'] = SpikeInfo['unit'] # the init
+# SpikeInfo['unit_0'] = SpikeInfo['unit']
 units = get_units(SpikeInfo, 'unit_0')
 n_units = len(units)
 

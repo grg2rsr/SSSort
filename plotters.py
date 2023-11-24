@@ -136,7 +136,7 @@ def plot_waveforms(Waveforms, SpikeInfo, dt, unit_column=None, unit_order=None, 
     return fig, axes
 
 def plot_compare_waveforms(Waveforms, SpikeInfo, unit_column, dt, units_compare, N=100, save=None, colors=None):
-    """  """
+    """ for manual merging: comparison plot of two units / waveforms """
 
     if colors is None:
         all_units = get_units(SpikeInfo, unit_column)
@@ -322,7 +322,6 @@ def plot_clustering(Waveforms, SpikeInfo, unit_column, color_by=None, n_componen
     if colors is None:
         colors = get_colors(units)
 
-    spike_labels = SpikeInfo[unit_column]
     frates = SpikeInfo['frate_fast']
 
     # pca
@@ -367,8 +366,6 @@ def plot_clustering(Waveforms, SpikeInfo, unit_column, color_by=None, n_componen
                         a = 0.5
                     axes[i,j].scatter(x[:,i], x[:,j], c=c, s=0.5, alpha=a, zorder=z)
                     
-
-
     for ax in axes.flatten():
         ax.set_aspect('equal')
         ax.set_xticks([])
@@ -430,66 +427,6 @@ def plot_spike_detect(AnalogSignal, min_prominence=3, N=4, w=0.2*pq.s, save=None
 
     return fig, axes
 
-def plot_fitted_spikes_offline(Segment, j, Models, SpikeInfo, unit_column, wsize, unit_order=None, zoom=None, save=None, colors=None):
-    # TODO deal with this situation
-    """ plot to inspect fitted spikes """
-    fig, axes =plt.subplots(nrows=2, sharex=True, sharey=True)
-    
-    asig = Segment.analogsignals[0]
-    axes[0].plot(asig.times, asig, color='k', lw=1)
-    axes[1].plot(asig.times, asig, color='k', lw=1)
-
-    units = get_units(SpikeInfo, unit_column)
-
-    if unit_order is not None:
-        units = [units[i] for i in unit_order]
-    
-    if colors is None:
-        colors = get_colors(units)
-
-    fs = asig.sampling_rate
-    wsize = wsize*pq.ms # HARDCODE!
-    wsize = (wsize * fs).simplified.magnitude.astype('int32') # HARDCODE
-
-    for u, unit in enumerate(units):
-        St, = select_by_dict(Segment.spiketrains, unit=unit)
-
-        asig_recons = np.zeros(asig.shape[0])
-        asig_recons[:] = np.nan 
-
-        inds = (St.times * fs).simplified.magnitude.astype('int32')
-        offset = (St.t_start * fs).simplified.magnitude.astype('int32')
-        inds = inds - offset
-
-        # try:
-        from_self = "frate_from_"+unit
-        frates = SpikeInfo.groupby([unit_column, 'segment']).get_group((int(unit),j))[from_self].values
-        # frates = SpikeInfo.groupby([unit_column, 'segment']).get_group((int(unit),j))['frate_fast'].values
-        pred_spikes = [Models[unit].predict(f) for f in frates]
-
-        for i, spike in enumerate(pred_spikes):
-            asig_recons[int(inds[i]-wsize/2):int(inds[i]+wsize/2)] = spike
-
-        axes[1].plot(asig.times, asig_recons, lw=2.0, color=colors[unit], alpha=0.8)
-        # except KeyError:
-        #     # thrown when no spikes are present in this segment
-        #     pass
-
-    if zoom is not None:
-        for ax in axes:
-            ax.set_xlim(zoom)
-            
-    stim_name = Path(Segment.annotations['filename']).stem
-    fig.suptitle(stim_name)
-    fig.tight_layout()
-    fig.subplots_adjust(top=0.9)
-    sns.despine(fig)
-
-    if save is not None:
-        fig.savefig(save)
-        plt.close(fig)
-
-    return fig, axes
 
 """
  
