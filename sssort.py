@@ -155,7 +155,6 @@ if Config.getboolean('preprocessing','z_score'):
 
 logger.info(' - spike detect - ')
 
-# global mad
 global_mad = np.average([MAD(seg.analogsignals[0]) for seg in Blk.segments])
 mad_thresh = Config.getfloat('spike detect', 'amplitude')
 min_prominence = Config.getfloat('spike detect', 'min_prominence')
@@ -164,14 +163,15 @@ if min_prominence == 0:
 wsize = Config.getfloat('spike detect', 'wsize') * pq.ms
 spike_detect_only = Config.getboolean('spike detect','spike_detect_only')
 
+# if only spike detection: diagnostic plot and and quit
 if spike_detect_only:
-    outpath = None
-    plt.ion()
-    seg = Blk.segments[0]
+    j = np.random.randint(len(Blk.segments))
+    seg = Blk.segments[j] # select a segment at random
     AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
-    plot_spike_detect(AnalogSignal, min_prominence, N=5, w=0.35*pq.s, save=None)
+    plt.ion()
+    plot_spike_detect(AnalogSignal, min_prominence, N=5, w=0.35*pq.s)
     logger.info("only spike detection - press enter to quit")
-    input()
+    input() # halt terminal here
     sys.exit()
 
 for i, seg in enumerate(Blk.segments):
@@ -193,25 +193,20 @@ for i, seg in enumerate(Blk.segments):
 n_spikes = np.sum([seg.spiketrains[0].shape[0] for seg in Blk.segments])
 logger.info("total number of detected spikes: %i" % n_spikes)
 
-seg = Blk.segments[0]
-AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
-SpikeTrain, = select_by_dict(seg.spiketrains, kind='all_spikes')
-
 """
  
- ######## ######## ##     ## ########  ##          ###    ######## ########  ######  
-    ##    ##       ###   ### ##     ## ##         ## ##      ##    ##       ##    ## 
-    ##    ##       #### #### ##     ## ##        ##   ##     ##    ##       ##       
-    ##    ######   ## ### ## ########  ##       ##     ##    ##    ######    ######  
-    ##    ##       ##     ## ##        ##       #########    ##    ##             ## 
-    ##    ##       ##     ## ##        ##       ##     ##    ##    ##       ##    ## 
-    ##    ######## ##     ## ##        ######## ##     ##    ##    ########  ######  
+ ##      ##    ###    ##     ## ######## ########  #######  ########  ##     ##  ######  
+ ##  ##  ##   ## ##   ##     ## ##       ##       ##     ## ##     ## ###   ### ##    ## 
+ ##  ##  ##  ##   ##  ##     ## ##       ##       ##     ## ##     ## #### #### ##       
+ ##  ##  ## ##     ## ##     ## ######   ######   ##     ## ########  ## ### ##  ######  
+ ##  ##  ## #########  ##   ##  ##       ##       ##     ## ##   ##   ##     ##       ## 
+ ##  ##  ## ##     ##   ## ##   ##       ##       ##     ## ##    ##  ##     ## ##    ## 
+  ###  ###  ##     ##    ###    ######## ##        #######  ##     ## ##     ##  ######  
  
 """
 
 logger.info(' - getting waveforms - ')
 
-fs = Blk.segments[0].analogsignals[0].sampling_rate
 n_samples = (wsize * fs).simplified.magnitude.astype('int32')
 
 waveforms = []
@@ -230,7 +225,7 @@ Waveforms = np.concatenate(waveforms, axis=1)
 # waveforms to disk
 outpath = results_folder / 'Waveforms.npy'
 np.save(outpath, Waveforms)
-logger.info("saving Waveforms to %s" % outpath)
+logger.info("saving spike waveforms to %s" % outpath)
 
 """
  
@@ -245,12 +240,14 @@ logger.info("saving Waveforms to %s" % outpath)
 """
 
 n_clusters_init = Config.getint('spike sort', 'init_clusters')
-logger.info("initial kmeans with %i clusters" % n_clusters_init)
+logger.info("initial k-means with %i clusters" % n_clusters_init)
 
 # initial clustering in the same space as subsequent spikes models
 n_model_comp = Config.getint('spike model', 'n_model_comp')
 pca = PCA(n_components=n_model_comp)
 X = pca.fit_transform(Waveforms.T)
+
+# the ini labels
 spike_labels = KMeans(n_clusters=n_clusters_init).fit_predict(X).astype('U')
 
 """
@@ -297,12 +294,6 @@ reject_spikes(Waveforms, SpikeInfo, 'unit', n_neighbors, verbose=True)
 # unassign spikes if unit has too little good spikes
 SpikeInfo = reject_unit(SpikeInfo, 'unit')
 
-outpath = plots_folder / ("waveforms_init" + fig_format)
-# fs = Blk.segments[0].analogsignals[0].sampling_rate
-# dt = (1/fs).rescale(pq.ms).magnitude
-plot_waveforms(Waveforms, SpikeInfo, dt.rescale(pq.ms).magnitude, N=100, save=outpath)
-
-
 """
  
  #### ##    ## #### ######## 
@@ -328,6 +319,9 @@ Models = train_Models(SpikeInfo, 'unit', Waveforms, n_comp=n_model_comp)
 outpath = plots_folder / ("Models_ini" + fig_format)
 plot_Models(Models, save=outpath)
 
+# plotting waveforms
+outpath = plots_folder / ("waveforms_init" + fig_format)
+plot_waveforms(Waveforms, SpikeInfo, dt.rescale(pq.ms).magnitude, N=100, save=outpath)
 """
  
  #### ######## ######## ########     ###    ######## ######## 
@@ -400,7 +394,7 @@ for it in range(1, n_max_iter):
     
     # plot waveforms
     outpath = plots_folder / ("Waveforms_%s%s" % (this_unit_col, fig_format))
-    plot_waveforms(Waveforms, SpikeInfo, dt.rescale(pq.ms).magnitude, this_unit_col, save=outpath)
+    plot_waveforms(Waveforms, SpikeInfo, dt.rescale(pq.ms).magnitude, this_unit_col, N=100, save=outpath)
 
     # Model eval
     valid_ix = np.where(SpikeInfo[this_unit_col] != '-1')[0]
@@ -449,6 +443,7 @@ for it in range(1, n_max_iter):
                         colors[k] = 'gray'
                 plt.ion()
                 fig, axes = plot_clustering(Waveforms, SpikeInfo, this_unit_col, colors=colors)
+                # fig, axes = plot_clustering(Waveforms, SpikeInfo, unit_column, color_by=None, n_components=4, N=300, save=None, colors=None, unit_order=None)
                 fig, axes = plot_compare_waveforms(Waveforms, SpikeInfo, this_unit_col, dt, merge)
 
                 # ask for user input
@@ -495,6 +490,11 @@ final_unit_col = 'unit_%i' % (int(last_unit_col.split('_')[1]) + 1)
 # final calculation of frate fast
 calc_update_frates(SpikeInfo, last_unit_col, kernel_fast, kernel_slow)
 
+# train final models
+Models = train_Models(SpikeInfo, last_unit_col, Waveforms, n_comp=n_model_comp)
+outpath = plots_folder / ("Models_final%s" % fig_format)
+plot_Models(Models, save=outpath)
+
 # final scoring and assingment
 Scores, units = Score_spikes(Waveforms, SpikeInfo, last_unit_col, Models, score_metric=Rss,
                                 reassign_penalty=reassign_penalty, noise_penalty=noise_penalty)
@@ -512,15 +512,24 @@ reject_spikes(Waveforms, SpikeInfo, final_unit_col)
 
 logger.info(" - saving results - ")
 
-# plot
+# plot convergence
 outpath = plots_folder / ("Convergence_Rss" + fig_format)
 plot_convergence(ScoresSum, save=outpath)
 
 outpath = plots_folder / ("Convergence_AIC" + fig_format)
 plot_convergence(AICs, save=outpath)
 
-outpath = plots_folder / ("Clustering" + fig_format)
-plot_clustering(Waveforms, SpikeInfo, final_unit_col, save=outpath)
+# plot final clustering
+outpath = plots_folder / ("Clustering_all" + fig_format)
+plot_clustering(Waveforms, SpikeInfo, final_unit_col, save=outpath, N=2000)
+units = get_units(SpikeInfo, final_unit_col)
+for unit in units:
+    outpath = plots_folder / ("Clustering_%s%s" % (unit, fig_format))
+    plot_clustering(Waveforms, SpikeInfo, final_unit_col, color_by=unit, save=outpath, N=2000)
+
+# plotting waveforms
+outpath = plots_folder / ("waveforms_final" + fig_format)
+plot_waveforms(Waveforms, SpikeInfo, dt.rescale(pq.ms).magnitude, this_unit_col, N=100, save=outpath)
 
 # update spike labels
 kernel = ele.kernels.GaussianKernel(sigma=kernel_fast * pq.s)
@@ -590,6 +599,7 @@ if Config.getboolean('output','csv'):
         FratesDf.to_csv(outpath)
 
 logger.info("all data is stored")
+
 """
  
  ########  ##        #######  ########    #### ##    ##  ######  ########  ########  ######  ######## 
@@ -601,6 +611,7 @@ logger.info("all data is stored")
  ##        ########  #######     ##       #### ##    ##  ######  ##        ########  ######     ##    
  
 """
+
 logger.info(" - making diagnostic plots - ")
 # plot all sorted spikes
 for j, Seg in enumerate(Blk.segments):

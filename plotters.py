@@ -2,7 +2,6 @@
 from pathlib import Path
 
 # sci
-import scipy as sp
 from scipy import signal, stats
 import numpy as np
 
@@ -26,7 +25,7 @@ def get_colors(units, palette='hls', desat=None, keep=True):
     else:
         n_colors = len(units)
     colors = sns.color_palette(palette, n_colors=n_colors, desat=desat)
-    # unit_ids = sp.arange(n_colors).astype('U')
+    # unit_ids = np.arange(n_colors).astype('U')
     D = dict(zip(units,colors))
     D['-1'] = (0.5,0.5,0.5)
     return D
@@ -40,7 +39,7 @@ def plot_Model(Model, max_rate=None, N=5, ax=None):
     if max_rate is None:
         max_rate = np.clip(np.max(Model.frates),0,200)
 
-    frates = sp.linspace(0, max_rate, N)
+    frates = np.linspace(0, max_rate, N)
     for j,f in enumerate(frates):
         ax.plot(Model.predict(f),color=colors[j])
     ax.text(0.05, 0.05, "%.2f"%max_rate, horizontalalignment='left', verticalalignment='baseline', transform=ax.transAxes,fontsize='small')
@@ -56,7 +55,7 @@ def plot_Models(Models, max_rates=None, N=5, unit_order=None, save=None, colors=
     if colors is None:
         colors = get_colors(units)
 
-    fig, axes = plt.subplots(ncols=len(units), sharey=True, figsize=[len(units),2])
+    fig, axes = plt.subplots(ncols=len(units), sharey=True, figsize=[len(units)*1.5, 3])
     for i,unit in enumerate(units):
         if max_rates is not None:
             max_rate = max_rates[i]
@@ -84,20 +83,36 @@ def plot_waveforms(Waveforms, SpikeInfo, dt, unit_column=None, unit_order=None, 
     if unit_order is not None:
         units = [units[i] for i in unit_order]
 
+    # unit colors
     if colors is None:
         colors = get_colors(units)
 
     tvec = np.arange(-1*Waveforms.shape[0]*dt/2, Waveforms.shape[0]*dt/2, dt)
 
-    fig, axes = plt.subplots(ncols=len(units), sharey=True,  figsize=[len(units),2])
+    fig, axes = plt.subplots(ncols=len(units), sharey=True,  figsize=[len(units)*1.5,3])
 
     for i, unit in enumerate(units):
+        SIgroup = SpikeInfo.groupby([unit_column,'good']).get_group((unit, True))
 
-        ix = SpikeInfo.groupby([unit_column,'good']).get_group((unit,True))['id']
+        # color by firing rate
+        frates = SIgroup['frate_fast']
+        
+        # subsampling spikes
+        ix = SIgroup['id']
         if N is not None and ix.shape[0] > N:
             ix = ix.sample(N)
         T = Waveforms[:,ix]
-        axes[i].plot(tvec, T, color=colors[unit],alpha=0.5,lw=1)
+
+        frates = frates[ix].values
+        frates_order = np.argsort(frates)
+
+        cmap = mpl.cm.inferno
+        norm = mpl.colors.Normalize(vmin=0, vmax=frates.max())
+        cols = cmap(norm(frates))
+
+        # axes[i].plot(tvec, T, color=colors[unit],alpha=0.5,lw=1)
+        for j in range(T.shape[1]):
+            axes[i].plot(tvec, T[:,frates_order[j]], color=cols[frates_order[j]],alpha=0.75,lw=1,zorder=1)
 
         try:
             ix = SpikeInfo.groupby([unit_column,'good']).get_group((unit,False))['id']
@@ -107,9 +122,9 @@ def plot_waveforms(Waveforms, SpikeInfo, dt, unit_column=None, unit_order=None, 
         except: # no good spikes for this unit
             pass
 
-        axes[i].plot(tvec, T, color='k',alpha=0.5,lw=1,zorder=-1)
+        axes[i].plot(tvec, T, color='gray',alpha=0.5,lw=1,zorder=-1)
         
-        axes[i].set_title(unit)
+        axes[i].set_title(unit, color=colors[unit])
         axes[i].set_xlabel('time (ms)')
 
     sns.despine()
@@ -137,8 +152,6 @@ def plot_compare_waveforms(Waveforms, SpikeInfo, unit_column, dt, units_compare,
     for unit in units_compare:
         frates_max.append(groups.get_group((unit, True))['frate_fast'].values.max())
     frate_max = np.array(frates_max).max()
-    print(frates_max)
-    print(frate_max)
     cmap = mpl.cm.inferno
     norm = mpl.colors.Normalize(vmin=0, vmax=frate_max)
 
@@ -200,7 +213,7 @@ def plot_segment(Seg, units, sigma=0.05, zscore=False, save=None, colors=None):
         St, = select_by_dict(Seg.spiketrains, unit=unit)
         for t in St.times:
             axes[0].plot([t,t],[i-0.4, i+0.4], color=colors[unit])
-        tvec = sp.linspace(asig.times.magnitude[0], asig.times.magnitude[-1], 1000)
+        tvec = np.linspace(asig.times.magnitude[0], asig.times.magnitude[-1], 1000)
         fr = est_rate(St.times.magnitude, tvec, sigma)
         if zscore: # FIXME TypeError: The input must be a list of AnalogSignal
             fr = ele.signal_processing.zscore(fr)
@@ -246,8 +259,8 @@ def plot_fitted_spikes(Segment, j, Models, SpikeInfo, unit_column, unit_order=No
     for u, unit in enumerate(units):
         St, = select_by_dict(Segment.spiketrains, unit=unit)
 
-        asig_recons = sp.zeros(asig.shape[0])
-        asig_recons[:] = sp.nan 
+        asig_recons = np.zeros(asig.shape[0])
+        asig_recons[:] = np.nan 
 
         wsize = 4*pq.ms # HARDCODE!
         wsize = (wsize * fs).simplified.magnitude.astype('int32') # HARDCODE
@@ -299,7 +312,7 @@ def plot_convergence(ScoresSum, save=None):
         fig.savefig(save)
         plt.close(fig)
 
-def plot_clustering(Waveforms, SpikeInfo, unit_column, n_components=5, N=300, save=None, colors=None, unit_order=None):
+def plot_clustering(Waveforms, SpikeInfo, unit_column, color_by=None, n_components=4, N=300, save=None, colors=None, unit_order=None):
     """ clustering inspect """
     units = get_units(SpikeInfo,unit_column)
 
@@ -310,6 +323,7 @@ def plot_clustering(Waveforms, SpikeInfo, unit_column, n_components=5, N=300, sa
         colors = get_colors(units)
 
     spike_labels = SpikeInfo[unit_column]
+    frates = SpikeInfo['frate_fast']
 
     # pca
     pca = PCA(n_components=n_components)
@@ -317,15 +331,43 @@ def plot_clustering(Waveforms, SpikeInfo, unit_column, n_components=5, N=300, sa
 
     fig, axes = plt.subplots(figsize=[7,7], nrows=n_components, ncols=n_components, sharex=True, sharey=True)
 
-    for unit in units:
-        ix = sp.where(spike_labels == unit)[0]
-        x = X[ix,:]
-        if N > x.shape[0]:
-            N = x.shape[0]
+    for i, unit in enumerate(units):
+        SIgroup = SpikeInfo.groupby([unit_column,'good']).get_group((unit, True))
+
+        frates = SIgroup['frate_fast']
+
+        cmap = mpl.cm.inferno
+        norm = mpl.colors.Normalize(vmin=0, vmax=frates.max())
+
+        # get the n-dim representation
+        X_unit = X[SIgroup.index,:]
+
+        if N > X_unit.shape[0]:
+            N = X_unit.shape[0]
+
+        ix = np.random.randint(X_unit.shape[0],size=N)
+
+        n_components = X.shape[1]
+        x = X_unit[ix,:]
+        frates = frates.values[ix]
+        cols = cmap(norm(frates))
+        
         for i in range(n_components):
             for j in range(n_components):
-                ix = np.random.randint(0,x.shape[0], size=N)
-                axes[i,j].plot(x[ix,i], x[ix,j], '.',  color=colors[unit], markersize=1, alpha=0.5)
+                if color_by is None:
+                    axes[i,j].scatter(x[:,i], x[:,j], c=colors[unit], s=0.5, alpha=0.5, edgecolor=None)
+                else:
+                    if color_by == unit:
+                        c = cols
+                        z = 1
+                        a = 1
+                    else:
+                        c = 'gray'
+                        z = -1
+                        a = 0.5
+                    axes[i,j].scatter(x[:,i], x[:,j], c=c, s=0.5, alpha=a, zorder=z)
+                    
+
 
     for ax in axes.flatten():
         ax.set_aspect('equal')
@@ -333,7 +375,14 @@ def plot_clustering(Waveforms, SpikeInfo, unit_column, n_components=5, N=300, sa
         ax.set_yticks([])
 
     sns.despine(fig)
+    if color_by is not None:
+        title = "Clustering, colored = %s" % color_by
+    else:
+        title = "Clustering"
+
+    fig.suptitle(title)
     fig.tight_layout()
+    fig.subplots_adjust(top=0.9)
 
     if save is not None:
         fig.savefig(save)
@@ -405,8 +454,8 @@ def plot_fitted_spikes_offline(Segment, j, Models, SpikeInfo, unit_column, wsize
     for u, unit in enumerate(units):
         St, = select_by_dict(Segment.spiketrains, unit=unit)
 
-        asig_recons = sp.zeros(asig.shape[0])
-        asig_recons[:] = sp.nan 
+        asig_recons = np.zeros(asig.shape[0])
+        asig_recons[:] = np.nan 
 
         inds = (St.times * fs).simplified.magnitude.astype('int32')
         offset = (St.t_start * fs).simplified.magnitude.astype('int32')
@@ -498,8 +547,8 @@ def plot_by_unit(ax, st, asig,Models, SpikeInfo, unit_column, unit_order=None, c
         fac = ax.get_ylim()[1]*(0.95-0.05*u)
         times = SpikeInfo["time"][SpikeInfo[unit_column] == unit]
         ax.plot(times, np.ones(times.shape)*fac, '|', markersize=2, linewidth= 0.5, label=unit+' spikes',color=colors[unit])
-        asig_recons = sp.zeros(asig.shape[0])
-        asig_recons[:] = sp.nan 
+        asig_recons = np.zeros(asig.shape[0])
+        asig_recons[:] = np.nan 
 
         # inds = (St.times * fs).simplified.magnitude.astype('int32')
 
