@@ -231,48 +231,48 @@ def spike_detect(AnalogSignal, min_height, min_prominence=None, lowpass_freq=100
  
 """
 
-def get_Templates(data, inds, n_samples):
+def get_Waveforms(data, inds, n_samples):
     """ slice windows of n_samples (symmetric) out of data at inds """
     hwsize = np.int32(n_samples/2)
 
-    Templates = np.zeros((n_samples, inds.shape[0]))
+    Waveforms = np.zeros((n_samples, inds.shape[0]))
     for i, ix in enumerate(inds):
-        Templates[:,i] = data[ix-hwsize:ix+hwsize]
+        Waveforms[:,i] = data[ix-hwsize:ix+hwsize]
 
-    return Templates
+    return Waveforms
 
-def outlier_reject(Templates, n_neighbors=80):
+def outlier_reject(Waveforms, n_neighbors=80):
     """ detect outliers using sklearns LOF, return outlier indices """
     clf = LocalOutlierFactor(n_neighbors=n_neighbors)
-    bad_inds = clf.fit_predict(Templates.T) == -1
+    bad_inds = clf.fit_predict(Waveforms.T) == -1
     return bad_inds
 
-def peak_reject(Templates, f=3):
+def peak_reject(Waveforms, f=3):
     """ detect outliers using peak rejection criterion. Peak must be at least
     f times larger than first or last sample. Return outlier indices """
     # peak criterion
 
-    n_samples = Templates.shape[0]
+    n_samples = Waveforms.shape[0]
     mid_ix = int(n_samples/2)
-    peak = Templates[mid_ix,:]
-    left = Templates[0,:]
-    right = Templates[-1,:]
+    peak = Waveforms[mid_ix,:]
+    left = Waveforms[0,:]
+    right = Waveforms[-1,:]
 
     # this takes care of negative or positive spikes
-    if np.average(Templates[mid_ix,:]) > 0:
+    if np.average(Waveforms[mid_ix,:]) > 0:
         bad_inds = np.logical_or(left > peak/f, right > peak/f)
     else:
         bad_inds = np.logical_or(left < peak/f, right < peak/f)
     return bad_inds
 
-def reject_spikes(Templates, SpikeInfo, unit_column, n_neighbors=80, verbose=False):
-    """ reject bad spikes from Templates, updates SpikeInfo """
+def reject_spikes(Waveforms, SpikeInfo, unit_column, n_neighbors=80, verbose=False):
+    """ reject bad spikes from Waveforms, updates SpikeInfo """
     units = get_units(SpikeInfo, unit_column)
     spike_labels = SpikeInfo[unit_column]
     for unit in units:
         ix = np.where(spike_labels == unit)[0]
-        a = outlier_reject(Templates[:,ix], n_neighbors)
-        b = peak_reject(Templates[:,ix])
+        a = outlier_reject(Waveforms[:,ix], n_neighbors)
+        b = peak_reject(Waveforms[:,ix])
         good_inds_unit = ~np.logical_or(a,b)
 
         SpikeInfo.loc[ix,'good'] = good_inds_unit
@@ -307,26 +307,26 @@ class Spike_Model():
 
     def __init__(self, n_comp=5):
         self.n_comp = n_comp
-        self.Templates = None
+        self.Waveforms = None
         self.frates = None
         pass
 
-    def fit(self, Templates, frates):
+    def fit(self, Waveforms, frates):
         """ fits the linear model """
         
         # keep data
-        self.Templates = Templates
+        self.Waveforms = Waveforms
         self.frates = frates
 
-        # make pca from templates
+        # make pca from Waveforms
         self.pca = PCA(n_components=self.n_comp)
-        self.pca.fit(Templates.T)
-        pca_templates = self.pca.transform(Templates.T)
+        self.pca.fit(Waveforms.T)
+        pca_waveforms = self.pca.transform(Waveforms.T)
 
         self.pfits = []
         p0 = [0,0]
         for i in range(self.n_comp):
-            pfit = sp.stats.linregress(frates, pca_templates[:,i])[:2]
+            pfit = sp.stats.linregress(frates, pca_waveforms[:,i])[:2]
             self.pfits.append(pfit)
 
     def predict(self, fr):
@@ -335,7 +335,7 @@ class Spike_Model():
         pca_i = [lin(fr,*self.pfits[i]) for i in range(len(self.pfits))]
         return self.pca.inverse_transform(pca_i)
 
-def train_Models(SpikeInfo, unit_column, Templates, n_comp=5, verbose=True):
+def train_Models(SpikeInfo, unit_column, Waveforms, n_comp=5, verbose=True):
     """ trains models for all units, using labels from given unit_column """
 
     if verbose:
@@ -351,7 +351,7 @@ def train_Models(SpikeInfo, unit_column, Templates, n_comp=5, verbose=True):
         SInfo = SpikeInfo.groupby([unit_column, 'good']).get_group((unit, True))
         # data
         ix = SInfo['id']
-        T = Templates[:,ix.values]
+        T = Waveforms[:,ix.values]
         # frates
         frates = SInfo['frate_fast']
         # model
@@ -453,7 +453,7 @@ def Rss(X,Y):
     """ sum of squared residuals """
     return np.sum((X-Y)**2) / X.shape[0]
 
-def Score_spikes(Templates, SpikeInfo, unit_column, Models, score_metric=Rss,
+def Score_spikes(Waveforms, SpikeInfo, unit_column, Models, score_metric=Rss,
                  reassign_penalty=0, noise_penalty=0):
     """ Score all spikes using Models """
 
@@ -468,7 +468,7 @@ def Score_spikes(Templates, SpikeInfo, unit_column, Models, score_metric=Rss,
 
     for i, spike_id in enumerate(spike_ids):
         Rates[i,:] = [SpikeInfo.loc[spike_id, 'frate_from_%s' % unit] for unit in units]
-        spike = Templates[:, spike_id]
+        spike = Waveforms[:, spike_id]
 
         for j, unit in enumerate(units):
             # get the corresponding rate
@@ -502,8 +502,8 @@ def Score_spikes(Templates, SpikeInfo, unit_column, Models, score_metric=Rss,
  
 """
 
-def calculate_pairwise_distances(Templates, SpikeInfo, unit_column, n_comp=5):
-    """ calculate all pairwise distances between Templates in PC space defined by n_comp.
+def calculate_pairwise_distances(Waveforms, SpikeInfo, unit_column, n_comp=5):
+    """ calculate all pairwise distances between Waveforms in PC space defined by n_comp.
     returns matrix of average distances and of their sd """
 
     units = get_units(SpikeInfo, unit_column)
@@ -513,7 +513,7 @@ def calculate_pairwise_distances(Templates, SpikeInfo, unit_column, n_comp=5):
     Sds = np.zeros((n_units, n_units))
     
     pca = PCA(n_components=n_comp)
-    X = pca.fit_transform(Templates.T)
+    X = pca.fit_transform(Waveforms.T)
 
     for i,unit_a in enumerate(units):
         for j, unit_b in enumerate(units):

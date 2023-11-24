@@ -73,7 +73,7 @@ sys.excepthook = handle_unhandled_exception
 
 # get config
 # config_path = Path(os.path.abspath(sys.argv[1]))
-config_path = Path("/home/georg/code/SSSort/example_config_testing_termin_criteria.ini")
+config_path = Path("/home/georg/code/SSSort/example_config.ini")
 Config = configparser.ConfigParser()
 Config.read(config_path)
 logger.info('config file read from %s' % config_path)
@@ -209,12 +209,12 @@ SpikeTrain, = select_by_dict(seg.spiketrains, kind='all_spikes')
  
 """
 
-logger.info(' - getting templates - ')
+logger.info(' - getting waveforms - ')
 
 fs = Blk.segments[0].analogsignals[0].sampling_rate
 n_samples = (wsize * fs).simplified.magnitude.astype('int32')
 
-templates = []
+waveforms = []
 for j, seg in enumerate(Blk.segments):
 
     AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
@@ -223,14 +223,14 @@ for j, seg in enumerate(Blk.segments):
     SpikeTrain, = select_by_dict(seg.spiketrains, kind='all_spikes')
     inds = (SpikeTrain.times * fs).simplified.magnitude.astype('int32')
 
-    templates.append(get_Templates(data, inds, n_samples))
+    waveforms.append(get_Waveforms(data, inds, n_samples))
 
-Templates = np.concatenate(templates, axis=1)
+Waveforms = np.concatenate(waveforms, axis=1)
 
-# templates to disk
-outpath = results_folder / 'Templates.npy'
-np.save(outpath, Templates)
-logger.info("saving Templates to %s" % outpath)
+# waveforms to disk
+outpath = results_folder / 'Waveforms.npy'
+np.save(outpath, Waveforms)
+logger.info("saving Waveforms to %s" % outpath)
 
 """
  
@@ -250,7 +250,7 @@ logger.info("initial kmeans with %i clusters" % n_clusters_init)
 # initial clustering in the same space as subsequent spikes models
 n_model_comp = Config.getint('spike model', 'n_model_comp')
 pca = PCA(n_components=n_model_comp)
-X = pca.fit_transform(Templates.T)
+X = pca.fit_transform(Waveforms.T)
 spike_labels = KMeans(n_clusters=n_clusters_init).fit_predict(X).astype('U')
 
 """
@@ -268,7 +268,7 @@ spike_labels = KMeans(n_clusters=n_clusters_init).fit_predict(X).astype('U')
 SpikeInfo = pd.DataFrame()
 
 # count spikes
-n_spikes = Templates.shape[1]
+n_spikes = Waveforms.shape[1]
 SpikeInfo['id'] = np.arange(n_spikes, dtype='int32')
 
 # get all spike times
@@ -290,17 +290,17 @@ SpikeInfo['segment'] = segment_labels
 # get all labels
 SpikeInfo['unit'] = spike_labels
 
-# get clean templates
+# get clean waveforms
 n_neighbors = Config.getint('spike model', 'template_reject')
-reject_spikes(Templates, SpikeInfo, 'unit', n_neighbors, verbose=True)
+reject_spikes(Waveforms, SpikeInfo, 'unit', n_neighbors, verbose=True)
 
 # unassign spikes if unit has too little good spikes
 SpikeInfo = reject_unit(SpikeInfo, 'unit')
 
-outpath = plots_folder / ("templates_init" + fig_format)
+outpath = plots_folder / ("waveforms_init" + fig_format)
 # fs = Blk.segments[0].analogsignals[0].sampling_rate
 # dt = (1/fs).rescale(pq.ms).magnitude
-plot_templates(Templates, SpikeInfo, dt.rescale(pq.ms).magnitude, N=100, save=outpath)
+plot_waveforms(Waveforms, SpikeInfo, dt.rescale(pq.ms).magnitude, N=100, save=outpath)
 
 
 """
@@ -324,7 +324,7 @@ calc_update_frates(SpikeInfo, 'unit', kernel_fast, kernel_slow)
 
 # model
 n_model_comp = Config.getint('spike model','n_model_comp')
-Models = train_Models(SpikeInfo, 'unit', Templates, n_comp=n_model_comp)
+Models = train_Models(SpikeInfo, 'unit', Waveforms, n_comp=n_model_comp)
 outpath = plots_folder / ("Models_ini" + fig_format)
 plot_Models(Models, save=outpath)
 
@@ -382,12 +382,12 @@ for it in range(1, n_max_iter):
     calc_update_frates(SpikeInfo, prev_unit_col, kernel_fast, kernel_slow)
 
     # train models with labels from last iteration
-    Models = train_Models(SpikeInfo, prev_unit_col, Templates, n_comp=n_model_comp)
+    Models = train_Models(SpikeInfo, prev_unit_col, Waveforms, n_comp=n_model_comp)
     outpath = plots_folder / ("Models_%s%s" % (prev_unit_col, fig_format))
     plot_Models(Models, save=outpath)
 
     # Score spikes with models
-    Scores, units = Score_spikes(Templates, SpikeInfo, prev_unit_col, Models, score_metric=Rss,
+    Scores, units = Score_spikes(Waveforms, SpikeInfo, prev_unit_col, Models, score_metric=Rss,
                                  reassign_penalty=reassign_penalty, noise_penalty=noise_penalty)
 
     # assign new labels
@@ -395,16 +395,16 @@ for it in range(1, n_max_iter):
     SpikeInfo[this_unit_col] = np.array([units[i] for i in min_ix], dtype='U')
 
     # clean assignment
-    SpikeInfo = reject_spikes(Templates, SpikeInfo, this_unit_col)
+    SpikeInfo = reject_spikes(Waveforms, SpikeInfo, this_unit_col)
     SpikeInfo = reject_unit(SpikeInfo, this_unit_col)
     
-    # plot templates
-    outpath = plots_folder / ("Templates_%s%s" % (this_unit_col, fig_format))
-    plot_templates(Templates, SpikeInfo, dt.rescale(pq.ms).magnitude, this_unit_col, save=outpath)
+    # plot waveforms
+    outpath = plots_folder / ("Waveforms_%s%s" % (this_unit_col, fig_format))
+    plot_waveforms(Waveforms, SpikeInfo, dt.rescale(pq.ms).magnitude, this_unit_col, save=outpath)
 
     # Model eval
     valid_ix = np.where(SpikeInfo[this_unit_col] != '-1')[0]
-    Rss_sum = np.sum(np.min(Scores[valid_ix], axis=1)) / valid_ix.shape[0] #Templates.shape[1]
+    Rss_sum = np.sum(np.min(Scores[valid_ix], axis=1)) / valid_ix.shape[0] #Waveforms.shape[1]
     ScoresSum.append(Rss_sum)
     units = get_units(SpikeInfo, this_unit_col)
     AICs.append(len(units) - 2 * np.log(Rss_sum))
@@ -419,7 +419,7 @@ for it in range(1, n_max_iter):
 
         # check for merges - if no merge - exit
         logger.info("checking for merges")
-        Avgs, Sds = calculate_pairwise_distances(Templates, SpikeInfo, this_unit_col)
+        Avgs, Sds = calculate_pairwise_distances(Waveforms, SpikeInfo, this_unit_col)
         merge = best_merge(Avgs, Sds, units, clust_alpha, exclude=rejected_merges)
 
         if force_merge:# force merge
@@ -448,8 +448,8 @@ for it in range(1, n_max_iter):
                     if k not in [str(m) for m in merge]:
                         colors[k] = 'gray'
                 plt.ion()
-                fig, axes = plot_clustering(Templates, SpikeInfo, this_unit_col, colors=colors)
-                fig, axes = plot_compare_templates(Templates, SpikeInfo, this_unit_col, dt, merge)
+                fig, axes = plot_clustering(Waveforms, SpikeInfo, this_unit_col, colors=colors)
+                fig, axes = plot_compare_waveforms(Waveforms, SpikeInfo, this_unit_col, dt, merge)
 
                 # ask for user input
                 if input("merge %s with %s (Y/N)?" % tuple(merge)).upper() == 'Y':
@@ -496,7 +496,7 @@ final_unit_col = 'unit_%i' % (int(last_unit_col.split('_')[1]) + 1)
 calc_update_frates(SpikeInfo, last_unit_col, kernel_fast, kernel_slow)
 
 # final scoring and assingment
-Scores, units = Score_spikes(Templates, SpikeInfo, last_unit_col, Models, score_metric=Rss,
+Scores, units = Score_spikes(Waveforms, SpikeInfo, last_unit_col, Models, score_metric=Rss,
                                 reassign_penalty=reassign_penalty, noise_penalty=noise_penalty)
 
 # assign new labels
@@ -506,7 +506,7 @@ SpikeInfo[final_unit_col] = new_labels
 
 # clean assignment
 SpikeInfo = reject_unit(SpikeInfo, final_unit_col)
-reject_spikes(Templates, SpikeInfo, final_unit_col)
+reject_spikes(Waveforms, SpikeInfo, final_unit_col)
 
 # - algo done - 
 
@@ -520,7 +520,7 @@ outpath = plots_folder / ("Convergence_AIC" + fig_format)
 plot_convergence(AICs, save=outpath)
 
 outpath = plots_folder / ("Clustering" + fig_format)
-plot_clustering(Templates, SpikeInfo, final_unit_col, save=outpath)
+plot_clustering(Waveforms, SpikeInfo, final_unit_col, save=outpath)
 
 # update spike labels
 kernel = ele.kernels.GaussianKernel(sigma=kernel_fast * pq.s)

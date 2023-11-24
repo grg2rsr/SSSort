@@ -73,8 +73,8 @@ def plot_Models(Models, max_rates=None, N=5, unit_order=None, save=None, colors=
         plt.close(fig)
     return fig, axes
 
-def plot_templates(Templates, SpikeInfo, dt, unit_column=None, unit_order=None, N=100, save=None, colors=None):
-    """ plots all templates """
+def plot_waveforms(Waveforms, SpikeInfo, dt, unit_column=None, unit_order=None, N=100, save=None, colors=None):
+    """ plots all waveforms """
 
     if unit_column is None:
         unit_column = 'unit'
@@ -87,7 +87,7 @@ def plot_templates(Templates, SpikeInfo, dt, unit_column=None, unit_order=None, 
     if colors is None:
         colors = get_colors(units)
 
-    tvec = np.arange(-1*Templates.shape[0]*dt/2, Templates.shape[0]*dt/2, dt)
+    tvec = np.arange(-1*Waveforms.shape[0]*dt/2, Waveforms.shape[0]*dt/2, dt)
 
     fig, axes = plt.subplots(ncols=len(units), sharey=True,  figsize=[len(units),2])
 
@@ -96,14 +96,14 @@ def plot_templates(Templates, SpikeInfo, dt, unit_column=None, unit_order=None, 
         ix = SpikeInfo.groupby([unit_column,'good']).get_group((unit,True))['id']
         if N is not None and ix.shape[0] > N:
             ix = ix.sample(N)
-        T = Templates[:,ix]
+        T = Waveforms[:,ix]
         axes[i].plot(tvec, T, color=colors[unit],alpha=0.5,lw=1)
 
         try:
             ix = SpikeInfo.groupby([unit_column,'good']).get_group((unit,False))['id']
             if N is not None and ix.shape[0] > N:
                 ix = ix.sample(N)
-            T = Templates[:,ix]
+            T = Waveforms[:,ix]
         except: # no good spikes for this unit
             pass
 
@@ -120,14 +120,14 @@ def plot_templates(Templates, SpikeInfo, dt, unit_column=None, unit_order=None, 
 
     return fig, axes
 
-def plot_compare_templates(Templates, SpikeInfo, unit_column, dt, units_compare, N=100, save=None, colors=None):
+def plot_compare_waveforms(Waveforms, SpikeInfo, unit_column, dt, units_compare, N=100, save=None, colors=None):
     """  """
 
     if colors is None:
         all_units = get_units(SpikeInfo, unit_column)
         colors = get_colors(all_units)
 
-    tvec = np.arange(-1*Templates.shape[0]*dt/2, Templates.shape[0]*dt/2, dt)
+    tvec = np.arange(-1*Waveforms.shape[0]*dt/2, Waveforms.shape[0]*dt/2, dt)
 
     fig, axes = plt.subplots(ncols=3, sharey=True,  figsize=[6,3])
 
@@ -153,7 +153,7 @@ def plot_compare_templates(Templates, SpikeInfo, unit_column, dt, units_compare,
             ix = group['id']
             if N is not None and ix.shape[0] > N:
                 ix = ix.sample(N)
-            T = Templates[:,ix]
+            T = Waveforms[:,ix]
 
             frates = group['frate_fast'][ix].values
             cols = cmap(norm(frates))
@@ -169,7 +169,7 @@ def plot_compare_templates(Templates, SpikeInfo, unit_column, dt, units_compare,
             ix = SpikeInfo.groupby([unit_column,'good']).get_group((unit,False))['id']
             if N is not None and ix.shape[0] > N:
                 ix = ix.sample(N)
-            T = Templates[:,ix]
+            T = Waveforms[:,ix]
             axes[i].plot(tvec, T, color='k',alpha=0.5,lw=0.75,zorder=-1)
         
         axes[i].set_title(unit, color=colors[unit])
@@ -299,7 +299,7 @@ def plot_convergence(ScoresSum, save=None):
         fig.savefig(save)
         plt.close(fig)
 
-def plot_clustering(Templates, SpikeInfo, unit_column, n_components=5, N=300, save=None, colors=None, unit_order=None):
+def plot_clustering(Waveforms, SpikeInfo, unit_column, n_components=5, N=300, save=None, colors=None, unit_order=None):
     """ clustering inspect """
     units = get_units(SpikeInfo,unit_column)
 
@@ -313,7 +313,7 @@ def plot_clustering(Templates, SpikeInfo, unit_column, n_components=5, N=300, sa
 
     # pca
     pca = PCA(n_components=n_components)
-    X = pca.fit_transform(Templates.T)
+    X = pca.fit_transform(Waveforms.T)
 
     fig, axes = plt.subplots(figsize=[7,7], nrows=n_components, ncols=n_components, sharex=True, sharey=True)
 
@@ -522,9 +522,9 @@ def plot_by_unit(ax, st, asig,Models, SpikeInfo, unit_column, unit_order=None, c
                 frates = SpikeInfo.groupby([unit_column]).get_group((unit))['frate_fast'].values
                 pred_spikes = [Models[unit].predict(f) for f in frates]
             else:
-                Templates = Models
+                Waveforms = Models
                 ix = SpikeInfo.groupby([unit_column]).get_group((unit))['id']
-                pred_spikes = Templates[:,ix].T
+                pred_spikes = Waveforms[:,ix].T
 
             for i, spike in enumerate(pred_spikes):
                 try:
@@ -615,7 +615,7 @@ def plot_fitted_spikes_complete(seg, Models, SpikeInfo, unit_column,max_window, 
 
         plot_function(seg, Models, SpikeInfo, unit_column, zoom=zoom, save=outpath,wsize=wsize, rejs=rejs, spike_label_interval=spike_label_interval)
 
-def plot_means(means, units, template_a, template_b, asigs, outpath=None, show=False, colors=None):
+def plot_means(means, units, waveform_a, waveform_b, asigs, outpath=None, show=False, colors=None):
     fig, axes = plt.subplots(ncols=len(units), figsize=[len(units)*3,4])
 
     if colors is None:
@@ -624,8 +624,8 @@ def plot_means(means, units, template_a, template_b, asigs, outpath=None, show=F
     for i,(mean,unit) in enumerate(zip(means,units)):
         axes[i].plot(mean, label=unit, color='k', linewidth=0.7)
         axes[i].plot(mean, color=colors[asigs[unit]], alpha=0.3, linewidth=5)
-        axes[i].plot(template_a, label="A", color=colors['A'], linewidth=0.7)
-        axes[i].plot(template_b, label="B", color=colors['B'], linewidth=0.7)
+        axes[i].plot(waveform_a, label="A", color=colors['A'], linewidth=0.7)
+        axes[i].plot(waveform_b, label="B", color=colors['B'], linewidth=0.7)
         axes[i].legend()
 
     plt.tight_layout()
