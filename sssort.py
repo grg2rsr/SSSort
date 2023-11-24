@@ -45,13 +45,8 @@ def handle_unhandled_exception(exc_type, exc_value, exc_traceback):
     logging.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback))
 sys.excepthook = handle_unhandled_exception
 
-# banner
-# if os.name == "posix":
-#     tp.banner("This is SSSort v1.0.0", 78)
-#     tp.banner("author: Georg Raiser - grg2rsr@gmail.com", 78)
-# else:
-#     print("This is SSSort v1.0.0")
-#     print("author: Georg Raiser - grg2rsr@gmail.com")
+print("This is SSSort v1.0.0")
+print("author: Georg Raiser - grg2rsr@gmail.com")
 
 """
  
@@ -285,10 +280,10 @@ SpikeInfo['unit_0'] = spike_labels
 
 # get clean waveforms
 n_neighbors = Config.getint('spike model', 'template_reject')
-reject_spikes(Waveforms, SpikeInfo, 'unit', n_neighbors, verbose=True)
+reject_spikes(Waveforms, SpikeInfo, 'unit_0', n_neighbors, verbose=True)
 
 # unassign spikes if unit has too little good spikes
-SpikeInfo = reject_unit(SpikeInfo, 'unit')
+SpikeInfo = reject_unit(SpikeInfo, 'unit_0')
 
 """
  
@@ -307,17 +302,17 @@ logger.info(' - initializing algorithm - ')
 # rate est
 kernel_slow = Config.getfloat('kernels', 'sigma_slow')
 kernel_fast = Config.getfloat('kernels', 'sigma_fast')
-calc_update_frates(SpikeInfo, 'unit', kernel_fast, kernel_slow)
+calc_update_frates(SpikeInfo, 'unit_0', kernel_fast, kernel_slow)
 
 # model
 n_model_comp = Config.getint('spike model','n_model_comp')
-Models = train_Models(SpikeInfo, 'unit', Waveforms, n_comp=n_model_comp)
+Models = train_Models(SpikeInfo, 'unit_0', Waveforms, n_comp=n_model_comp)
 outpath = plots_folder / ("Models_ini" + fig_format)
 plot_Models(Models, save=outpath)
 
 # plotting waveforms
 outpath = plots_folder / ("waveforms_init" + fig_format)
-plot_waveforms(Waveforms, SpikeInfo, dt.rescale(pq.ms).magnitude, N=100, save=outpath)
+plot_waveforms(Waveforms, SpikeInfo, dt.rescale(pq.ms).magnitude, unit_column='unit_0', N=100, save=outpath)
 """
  
  #### ######## ######## ########     ###    ######## ######## 

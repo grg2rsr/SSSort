@@ -75,9 +75,6 @@ def plot_Models(Models, max_rates=None, N=5, unit_order=None, save=None, colors=
 def plot_waveforms(Waveforms, SpikeInfo, dt, unit_column=None, unit_order=None, N=100, save=None, colors=None):
     """ plots all waveforms """
 
-    if unit_column is None:
-        unit_column = 'unit'
-
     units = get_units(SpikeInfo, unit_column)
 
     if unit_order is not None:
