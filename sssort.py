@@ -1,5 +1,7 @@
 # sys
-import sys, os, shutil
+import sys
+import os
+import shutil
 import dill
 import configparser
 from pathlib import Path
@@ -31,7 +33,7 @@ date_fmt = '%Y-%m-%d %H:%M:%S'
 formatter = logging.Formatter(log_fmt, datefmt=date_fmt)
 
 # for printing to stdout
-logger = logging.getLogger() # get all loggers
+logger = logging.getLogger()  # get all loggers
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
 logging.getLogger('functions').setLevel(logging.INFO)
 stream_handler = logging.StreamHandler()
@@ -40,9 +42,13 @@ logger.addHandler(stream_handler)
 logger.setLevel(logging.DEBUG)
 
 # logging unhandled exceptions
+
+
 def handle_unhandled_exception(exc_type, exc_value, exc_traceback):
     # TODO make this cleaner that it doesn't use global namespace
     logging.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+
 sys.excepthook = handle_unhandled_exception
 
 print("This is SSSort v1.0.0")
@@ -70,11 +76,11 @@ Config = configparser.ConfigParser()
 Config.read(config_path)
 
 # handling paths and creating output directory
-data_path = Path(Config.get('path','data_path'))
+data_path = Path(Config.get('path', 'data_path'))
 if not data_path.is_absolute():
     data_path = config_path.parent / data_path
 
-exp_name = Config.get('path','experiment_name')
+exp_name = Config.get('path', 'experiment_name')
 results_folder = config_path.parent / exp_name / 'results'
 plots_folder = results_folder / 'plots'
 os.makedirs(plots_folder, exist_ok=True)
@@ -97,11 +103,11 @@ logger.info('data read from %s' % data_path)
 
 # get data properies
 fs = Blk.segments[0].analogsignals[0].sampling_rate
-dt = (1/fs).rescale(pq.s)
+dt = (1 / fs).rescale(pq.s)
 
 # plotting
-mpl.rcParams['figure.dpi'] = Config.get('output','fig_dpi')
-fig_format = Config.get('output','fig_format')
+mpl.rcParams['figure.dpi'] = Config.get('output', 'fig_dpi')
+fig_format = Config.get('output', 'fig_format')
 
 """
  
@@ -121,12 +127,12 @@ for seg in Blk.segments:
     seg.analogsignals[0].annotate(kind='original')
 
 # highpass filter
-freq = Config.getfloat('preprocessing','highpass_freq')
+freq = Config.getfloat('preprocessing', 'highpass_freq')
 logger.info("highpass filtering data at %.2f Hz" % freq)
 for seg in Blk.segments:
     seg.analogsignals[0] = ele.signal_processing.butter(seg.analogsignals[0], highpass_freq=freq)
 
-if Config.getboolean('preprocessing','z_score'):
+if Config.getboolean('preprocessing', 'z_score'):
     logger.info("z-scoring signals")
     for seg in Blk.segments:
         seg.analogsignals = [ele.signal_processing.zscore(seg.analogsignals)]
@@ -152,32 +158,32 @@ min_prominence = Config.getfloat('spike detect', 'min_prominence')
 if min_prominence == 0:
     min_prominence = None
 wsize = Config.getfloat('spike detect', 'wsize') * pq.ms
-spike_detect_only = Config.getboolean('spike detect','spike_detect_only')
+spike_detect_only = Config.getboolean('spike detect', 'spike_detect_only')
 
 # if only spike detection: diagnostic plot and and quit
 if spike_detect_only:
     j = np.random.randint(len(Blk.segments))
-    seg = Blk.segments[j] # select a segment at random
+    seg = Blk.segments[j]  # select a segment at random
     AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
     plt.ion()
-    plot_spike_detect(AnalogSignal, min_prominence, N=5, w=0.35*pq.s)
+    plot_spike_detect(AnalogSignal, min_prominence, N=5, w=0.35 * pq.s)
     logger.info("only spike detection - press enter to quit")
-    input() # halt terminal here
+    input()  # halt terminal here
     sys.exit()
 
 for i, seg in enumerate(Blk.segments):
     AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
 
     # inverting
-    if Config.get('spike detect','peak_mode') == 'negative':
+    if Config.get('spike detect', 'peak_mode') == 'negative':
         AnalogSignal *= -1
 
     # spike detection
-    st = spike_detect(AnalogSignal, global_mad*mad_thresh, min_prominence)
+    st = spike_detect(AnalogSignal, global_mad * mad_thresh, min_prominence)
     st.annotate(kind='all_spikes')
 
     # remove border spikes
-    st_cut = st.time_slice(st.t_start + wsize/2, st.t_stop - wsize/2)
+    st_cut = st.time_slice(st.t_start + wsize / 2, st.t_stop - wsize / 2)
     st_cut.t_start = st.t_start
     seg.spiketrains.append(st_cut)
 
@@ -304,7 +310,7 @@ kernel_fast = Config.getfloat('kernels', 'sigma_fast')
 calc_update_frates(SpikeInfo, 'unit_0', kernel_fast, kernel_slow)
 
 # model
-n_model_comp = Config.getint('spike model','n_model_comp')
+n_model_comp = Config.getint('spike model', 'n_model_comp')
 Models = train_Models(SpikeInfo, 'unit_0', Waveforms, n_comp=n_model_comp)
 outpath = plots_folder / ("Models_ini" + fig_format)
 plot_Models(Models, save=outpath)
@@ -353,7 +359,7 @@ AICs = []
 for it in range(1, n_max_iter):
 
     # unit columns
-    prev_unit_col = 'unit_%i' % (it-1)
+    prev_unit_col = 'unit_%i' % (it - 1)
     this_unit_col = 'unit_%i' % it
 
     if it > 2:
@@ -380,14 +386,14 @@ for it in range(1, n_max_iter):
     # clean assignment
     SpikeInfo = reject_spikes(Waveforms, SpikeInfo, this_unit_col)
     SpikeInfo = reject_unit(SpikeInfo, this_unit_col)
-    
+
     # plot waveforms
     outpath = plots_folder / ("Waveforms_%s%s" % (this_unit_col, fig_format))
     plot_waveforms(Waveforms, SpikeInfo, dt.rescale(pq.ms).magnitude, this_unit_col, N=100, save=outpath)
 
     # Model eval
     valid_ix = np.where(SpikeInfo[this_unit_col] != '-1')[0]
-    Rss_sum = np.sum(np.min(Scores[valid_ix], axis=1)) / valid_ix.shape[0] #Waveforms.shape[1]
+    Rss_sum = np.sum(np.min(Scores[valid_ix], axis=1)) / valid_ix.shape[0]  # Waveforms.shape[1]
     ScoresSum.append(Rss_sum)
     units = get_units(SpikeInfo, this_unit_col)
     AICs.append(len(units) - 2 * np.log(Rss_sum))
@@ -396,7 +402,7 @@ for it in range(1, n_max_iter):
     n_changes, _ = get_changes(SpikeInfo, this_unit_col)
     logger.info("Iteration: %i - Error: %.2e - # reassigned spikes: %s" % (it, Rss_sum, n_changes))
 
-    if check_convergence(SpikeInfo, it, n_hist, conv_crit): # refactor conv_crit into 'tol'
+    if check_convergence(SpikeInfo, it, n_hist, conv_crit):  # refactor conv_crit into 'tol'
 
         logger.info("convergence criterion reached")
 
@@ -405,7 +411,7 @@ for it in range(1, n_max_iter):
         Avgs, Sds = calculate_pairwise_distances(Waveforms, SpikeInfo, this_unit_col)
         merge = best_merge(Avgs, Sds, units, clust_alpha, exclude=rejected_merges)
 
-        if force_merge:# force merge
+        if force_merge:  # force merge
             while len(merge) == 0:
                 clust_alpha += alpha_incr
                 logger.info("increasing alpha to: %.2f" % clust_alpha)
@@ -427,7 +433,7 @@ for it in range(1, n_max_iter):
                 # show plots for this merge
                 units = get_units(SpikeInfo, this_unit_col)
                 colors = get_colors(units)
-                for k,v in colors.items():
+                for k, v in colors.items():
                     if k not in [str(m) for m in merge]:
                         colors[k] = 'gray'
                 plt.ion()
@@ -486,7 +492,7 @@ plot_Models(Models, save=outpath)
 
 # final scoring and assingment
 Scores, units = Score_spikes(Waveforms, SpikeInfo, last_unit_col, Models, score_metric=Rss,
-                                reassign_penalty=reassign_penalty, noise_penalty=noise_penalty)
+                             reassign_penalty=reassign_penalty, noise_penalty=noise_penalty)
 
 # assign new labels
 min_ix = np.argmin(Scores, axis=1)
@@ -497,7 +503,7 @@ SpikeInfo[final_unit_col] = new_labels
 SpikeInfo = reject_unit(SpikeInfo, final_unit_col)
 reject_spikes(Waveforms, SpikeInfo, final_unit_col)
 
-# - algo done - 
+# - algo done -
 
 logger.info(" - saving results - ")
 
@@ -533,7 +539,7 @@ for i, seg in enumerate(Blk.segments):
     sts = [SpikeTrain]
     for unit in units:
         times = SpikeTrain.times[np.array(spike_labels) == unit]
-        st = neo.core.SpikeTrain(times, t_start = SpikeTrain.t_start, t_stop=SpikeTrain.t_stop)
+        st = neo.core.SpikeTrain(times, t_start=SpikeTrain.t_start, t_stop=SpikeTrain.t_stop)
         st.annotate(unit=unit)
         sts.append(st)
     seg.spiketrains = sts
@@ -542,7 +548,7 @@ for i, seg in enumerate(Blk.segments):
     asigs = [seg.analogsignals[0]]
     for unit in units:
         St, = select_by_dict(seg.spiketrains, unit=unit)
-        frate = ele.statistics.instantaneous_rate(St, kernel=kernel, sampling_period=1/fs)
+        frate = ele.statistics.instantaneous_rate(St, kernel=kernel, sampling_period=1 / fs)
         frate.annotate(kind='frate_fast', unit=unit)
         asigs.append(frate)
     seg.analogsignals = asigs
@@ -564,7 +570,7 @@ with open(outpath, 'wb') as fH:
     dill.dump(Models, fH)
 
 # output csv data
-if Config.getboolean('output','csv'):
+if Config.getboolean('output', 'csv'):
     logger.info("writing csv")
 
     # SpikeTimes
@@ -609,7 +615,7 @@ for j, Seg in enumerate(Blk.segments):
     plot_segment(Seg, units, save=outpath)
 
 # plot all sorted spikes
-zoom = np.array(Config.get('output','zoom').split(','),dtype='float32') / 1000
+zoom = np.array(Config.get('output', 'zoom').split(','), dtype='float32') / 1000
 for j, Seg in enumerate(Blk.segments):
     seg_name = Path(Seg.annotations['filename']).stem
     outpath = plots_folder / (seg_name + '_fitted_spikes' + fig_format)

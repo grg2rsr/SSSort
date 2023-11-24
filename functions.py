@@ -1,5 +1,8 @@
 # system
-import sys, os, time, copy
+import sys
+import os
+import time
+import copy
 import warnings
 
 # sci
@@ -35,6 +38,7 @@ t0 = time.time()
  
 """
 
+
 def select_by_dict(objs, **selection):
     """
     selects elements in a list of neo objects with annotations matching the
@@ -53,11 +57,13 @@ def select_by_dict(objs, **selection):
             res.append(obj)
     return res
 
+
 def sort_units(units):
     """ helper to sort units ascendingly according to their number """
     units = np.array(units, dtype='int32')
     units = np.sort(units).astype('U')
     return list(units)
+
 
 def get_units(SpikeInfo, unit_column, remove_unassinged=True):
     """ helper that returns all units in a given unit column, with or without unassigned """
@@ -66,6 +72,7 @@ def get_units(SpikeInfo, unit_column, remove_unassinged=True):
         if '-1' in units:
             units.remove('-1')
     return sort_units(units)
+
 
 def reject_unit(SpikeInfo, unit_column, min_good=80):
     """ unassign spikes from unit it unit does not contain enough spikes as samples """
@@ -77,13 +84,14 @@ def reject_unit(SpikeInfo, unit_column, min_good=80):
             SpikeInfo.loc[Df.index, unit_column] = '-1'
     return SpikeInfo
 
+
 def get_changes(SpikeInfo, unit_column):
     """ get the number of spikes that changed cluster from the last it
      to this it """
 
     this_unit_col = unit_column
     it = int(this_unit_col.split('_')[1])
-    prev_unit_col = 'unit_%i' % (it-1)
+    prev_unit_col = 'unit_%i' % (it - 1)
 
     this_units = SpikeInfo[this_unit_col].values
     prev_units = SpikeInfo[prev_unit_col].values
@@ -99,15 +107,16 @@ def get_changes(SpikeInfo, unit_column):
 
     return n_changes, Changes
 
+
 def check_convergence(SpikeInfo, it, hist, conv_crit):
     """ returns True if changes have stabilized """
     if it > hist:
         f_changes = []
         # n_spikes = np.sum(SpikeInfo['unit_%i' % it] != -1) # this won't work
         n_spikes = SpikeInfo.shape[0]
-        
+
         for j in range(hist):
-            col = 'unit_%i' % (it-j)
+            col = 'unit_%i' % (it - j)
             f_changes.append(get_changes(SpikeInfo, col)[0] / n_spikes)
 
         if np.average(f_changes) < conv_crit:
@@ -116,6 +125,7 @@ def check_convergence(SpikeInfo, it, hist, conv_crit):
             return False
     else:
         return False
+
 
 """
  
@@ -129,6 +139,7 @@ def check_convergence(SpikeInfo, it, hist, conv_crit):
  
 """
 
+
 def MAD(AnalogSignal, keep_units=True):
     """ median absolute deviation of an AnalogSignal """
     X = AnalogSignal.magnitude
@@ -137,7 +148,8 @@ def MAD(AnalogSignal, keep_units=True):
         mad = mad * AnalogSignal.units
     return mad
 
-def spike_detect(AnalogSignal, min_height, min_prominence=None, lowpass_freq=1000*pq.Hz):
+
+def spike_detect(AnalogSignal, min_height, min_prominence=None, lowpass_freq=1000 * pq.Hz):
 
     if lowpass_freq is not None:
         asig = ele.signal_processing.butter(AnalogSignal, lowpass_freq=lowpass_freq)
@@ -153,15 +165,16 @@ def spike_detect(AnalogSignal, min_height, min_prominence=None, lowpass_freq=100
     res = signal.find_peaks(data, height=[min_height, np.inf], prominence=prominence)
 
     peak_inds = res[0]
-    peak_amps = res[1]['peak_heights'][:, np.newaxis, np.newaxis]  * AnalogSignal.units
+    peak_amps = res[1]['peak_heights'][:, np.newaxis, np.newaxis] * AnalogSignal.units
 
     SpikeTrain = neo.core.SpikeTrain(AnalogSignal.times[peak_inds],
-                                        t_start=AnalogSignal.t_start,
-                                        t_stop=AnalogSignal.t_stop,
-                                        sampling_rate=AnalogSignal.sampling_rate,
-                                        waveform=peak_amps)
-    
+                                     t_start=AnalogSignal.t_start,
+                                     t_stop=AnalogSignal.t_stop,
+                                     sampling_rate=AnalogSignal.sampling_rate,
+                                     waveform=peak_amps)
+
     return SpikeTrain
+
 
 """
  
@@ -175,15 +188,17 @@ def spike_detect(AnalogSignal, min_height, min_prominence=None, lowpass_freq=100
  
 """
 
+
 def get_Waveforms(data, inds, n_samples):
     """ slice windows of n_samples (symmetric) out of data at inds """
-    hwsize = np.int32(n_samples/2)
+    hwsize = np.int32(n_samples / 2)
 
     Waveforms = np.zeros((n_samples, inds.shape[0]))
     for i, ix in enumerate(inds):
-        Waveforms[:,i] = data[ix-hwsize:ix+hwsize]
+        Waveforms[:, i] = data[ix - hwsize:ix + hwsize]
 
     return Waveforms
+
 
 def outlier_reject(Waveforms, n_neighbors=80):
     """ detect outliers using sklearns LOF, return outlier indices """
@@ -191,23 +206,25 @@ def outlier_reject(Waveforms, n_neighbors=80):
     bad_inds = clf.fit_predict(Waveforms.T) == -1
     return bad_inds
 
+
 def peak_reject(Waveforms, f=3):
     """ detect outliers using peak rejection criterion. Peak must be at least
     f times larger than first or last sample. Return outlier indices """
     # peak criterion
 
     n_samples = Waveforms.shape[0]
-    mid_ix = int(n_samples/2)
-    peak = Waveforms[mid_ix,:]
-    left = Waveforms[0,:]
-    right = Waveforms[-1,:]
+    mid_ix = int(n_samples / 2)
+    peak = Waveforms[mid_ix, :]
+    left = Waveforms[0, :]
+    right = Waveforms[-1, :]
 
     # this takes care of negative or positive spikes
-    if np.average(Waveforms[mid_ix,:]) > 0:
-        bad_inds = np.logical_or(left > peak/f, right > peak/f)
+    if np.average(Waveforms[mid_ix, :]) > 0:
+        bad_inds = np.logical_or(left > peak / f, right > peak / f)
     else:
-        bad_inds = np.logical_or(left < peak/f, right < peak/f)
+        bad_inds = np.logical_or(left < peak / f, right < peak / f)
     return bad_inds
+
 
 def reject_spikes(Waveforms, SpikeInfo, unit_column, n_neighbors=80, verbose=False):
     """ reject bad spikes from Waveforms, updates SpikeInfo """
@@ -215,12 +232,12 @@ def reject_spikes(Waveforms, SpikeInfo, unit_column, n_neighbors=80, verbose=Fal
     spike_labels = SpikeInfo[unit_column]
     for unit in units:
         ix = np.where(spike_labels == unit)[0]
-        a = outlier_reject(Waveforms[:,ix], n_neighbors)
-        b = peak_reject(Waveforms[:,ix])
-        good_inds_unit = ~np.logical_or(a,b)
+        a = outlier_reject(Waveforms[:, ix], n_neighbors)
+        b = peak_reject(Waveforms[:, ix])
+        good_inds_unit = ~np.logical_or(a, b)
 
-        SpikeInfo.loc[ix,'good'] = good_inds_unit
-        
+        SpikeInfo.loc[ix, 'good'] = good_inds_unit
+
         if verbose:
             n_total = ix.shape[0]
             n_good = np.sum(good_inds_unit)
@@ -229,6 +246,8 @@ def reject_spikes(Waveforms, SpikeInfo, unit_column, n_neighbors=80, verbose=Fal
             logger.info("# spikes for unit %s: total:%i \t good/bad:%i,%i \t %.2f" % (unit, n_total, n_good, n_bad, frac))
 
     return SpikeInfo
+
+
 """
  
   ######  ########  #### ##    ## ########    ##     ##  #######  ########  ######## ##       
@@ -240,9 +259,12 @@ def reject_spikes(Waveforms, SpikeInfo, unit_column, n_neighbors=80, verbose=Fal
   ######  ##        #### ##    ## ########    ##     ##  #######  ########  ######## ######## 
  
 """
+
+
 def lin(x, *args):
     m, b = args
-    return x*m+b
+    return x * m + b
+
 
 class Spike_Model():
     """ models how firing rate influences spike shape. First forms a 
@@ -257,7 +279,7 @@ class Spike_Model():
 
     def fit(self, Waveforms, frates):
         """ fits the linear model """
-        
+
         # keep data
         self.Waveforms = Waveforms
         self.frates = frates
@@ -268,16 +290,17 @@ class Spike_Model():
         pca_waveforms = self.pca.transform(Waveforms.T)
 
         self.pfits = []
-        p0 = [0,0]
+        p0 = [0, 0]
         for i in range(self.n_comp):
-            pfit = stats.linregress(frates, pca_waveforms[:,i])[:2]
+            pfit = stats.linregress(frates, pca_waveforms[:, i])[:2]
             self.pfits.append(pfit)
 
     def predict(self, fr):
         """ predicts spike shape at firing rate fr, in PC space, returns
         inverse transform: the actual spike shape as it would be measured """
-        pca_i = [lin(fr,*self.pfits[i]) for i in range(len(self.pfits))]
+        pca_i = [lin(fr, *self.pfits[i]) for i in range(len(self.pfits))]
         return self.pca.inverse_transform(pca_i)
+
 
 def train_Models(SpikeInfo, unit_column, Waveforms, n_comp=5):
     """ trains models for all units, using labels from given unit_column """
@@ -290,24 +313,26 @@ def train_Models(SpikeInfo, unit_column, Waveforms, n_comp=5):
         SInfo = SpikeInfo.groupby([unit_column, 'good']).get_group((unit, True))
         # data
         ix = SInfo['id']
-        T = Waveforms[:,ix.values]
+        T = Waveforms[:, ix.values]
         # frates
         frates = SInfo['frate_fast']
         # model
         Models[unit] = Spike_Model(n_comp=n_comp)
         Models[unit].fit(T, frates)
-    
+
     return Models
+
 
 def sort_Models(Models):
     units = list(Models.keys())
     amps = [np.max(Models[u].predict(1)) for u in units]
-    order = np.argsort(amps)[::-1] # descending amplitude order
+    order = np.argsort(amps)[::-1]  # descending amplitude order
     from collections import OrderedDict
     Models_ordered = OrderedDict()
     for k in order:
         Models_ordered[units[k]] = Models[units[k]]
     return Models_ordered
+
 
 """
  
@@ -325,21 +350,24 @@ def sort_Models(Models):
 #     """ local firing rate - symmetric gaussian kernel with width parameter sig """
 #     return 1/(sig*np.sqrt(2*np.pi)) * np.exp(-0.5 * ((t-mu)/sig)**2)
 
+
 def local_frate(t, mu, tau):
     """ local firing rate - anit-causal alpha kernel with shape parameter tau """
     # this causes a lot of numerical warnings
-    y = (1/tau**2)*(t-mu)*np.exp(-(t-mu)/tau)
+    y = (1 / tau**2) * (t - mu) * np.exp(-(t - mu) / tau)
     y[t < mu] = 0
     return y
 
+
 def est_rate(spike_times, eval_times, sig):
     """ returns estimated rate at spike_times """
-    rate = local_frate(eval_times[:,np.newaxis], spike_times[np.newaxis,:], sig).sum(1)
+    rate = local_frate(eval_times[:, np.newaxis], spike_times[np.newaxis, :], sig).sum(1)
     return rate
+
 
 def calc_update_frates(SpikeInfo, unit_column, kernel_fast, kernel_slow):
     """ calculate all firing rates for all units, based on unit_column. Updates SpikeInfo """
-    
+
     from_units = get_units(SpikeInfo, unit_column, remove_unassinged=True)
     to_units = get_units(SpikeInfo, unit_column, remove_unassinged=False)
 
@@ -349,7 +377,7 @@ def calc_update_frates(SpikeInfo, unit_column, kernel_fast, kernel_slow):
         for from_unit in from_units:
             if (from_unit, i) in SIgroups.groups:
                 SInfo = SIgroups.get_group((from_unit, i))
-            
+
                 # spike times
                 from_times = SInfo['time'].values
 
@@ -358,8 +386,8 @@ def calc_update_frates(SpikeInfo, unit_column, kernel_fast, kernel_slow):
 
                 # set
                 ix = SInfo['id']
-                SpikeInfo.loc[ix,'frate_fast'] = rate
-            
+                SpikeInfo.loc[ix, 'frate_fast'] = rate
+
             # the rates on others
             for to_unit in to_units:
                 if (to_unit, i) in SIgroups.groups:
@@ -372,7 +400,7 @@ def calc_update_frates(SpikeInfo, unit_column, kernel_fast, kernel_slow):
                     pred_rate = est_rate(from_times, to_times, kernel_slow)
 
                     ix = SInfo['id']
-                    SpikeInfo.loc[ix,'frate_from_'+from_unit] = pred_rate
+                    SpikeInfo.loc[ix, 'frate_from_' + from_unit] = pred_rate
 
 
 """
@@ -387,9 +415,11 @@ def calc_update_frates(SpikeInfo, unit_column, kernel_fast, kernel_slow):
  
 """
 
-def Rss(X,Y):
+
+def Rss(X, Y):
     """ sum of squared residuals """
-    return np.sum((X-Y)**2) / X.shape[0]
+    return np.sum((X - Y)**2) / X.shape[0]
+
 
 def Score_spikes(Waveforms, SpikeInfo, unit_column, Models, score_metric=Rss,
                  reassign_penalty=0, noise_penalty=0):
@@ -405,28 +435,29 @@ def Score_spikes(Waveforms, SpikeInfo, unit_column, Models, score_metric=Rss,
     Rates = np.zeros((n_spikes, n_units))
 
     for i, spike_id in enumerate(spike_ids):
-        Rates[i,:] = [SpikeInfo.loc[spike_id, 'frate_from_%s' % unit] for unit in units]
+        Rates[i, :] = [SpikeInfo.loc[spike_id, 'frate_from_%s' % unit] for unit in units]
         spike = Waveforms[:, spike_id]
 
         for j, unit in enumerate(units):
             # get the corresponding rate
-            rate = Rates[i,j]
+            rate = Rates[i, j]
 
             # the simulated data
             spike_pred = Models[unit].predict(rate)
-            Scores[i,j] = score_metric(spike, spike_pred)
+            Scores[i, j] = score_metric(spike, spike_pred)
 
             # penalty adjust
             if int(unit) != SpikeInfo.loc[spike_id, unit_column]:
-                Scores[i,j] = Scores[i,j] * (1+reassign_penalty)
+                Scores[i, j] = Scores[i, j] * (1 + reassign_penalty)
 
     Scores[np.isnan(Scores)] = np.inf
-    
+
     # extra penalty for "trash cluster"
     trash_ix = np.argmin([np.max(Models[u].predict(1)) for u in units])
-    Scores[:,trash_ix] = Scores[:,trash_ix] * (1+noise_penalty)
-            
+    Scores[:, trash_ix] = Scores[:, trash_ix] * (1 + noise_penalty)
+
     return Scores, units
+
 
 """
  
@@ -440,6 +471,7 @@ def Score_spikes(Waveforms, SpikeInfo, unit_column, Models, score_metric=Rss,
  
 """
 
+
 def calculate_pairwise_distances(Waveforms, SpikeInfo, unit_column, n_comp=5):
     """ calculate all pairwise distances between Waveforms in PC space defined by n_comp.
     returns matrix of average distances and of their sd """
@@ -449,42 +481,43 @@ def calculate_pairwise_distances(Waveforms, SpikeInfo, unit_column, n_comp=5):
 
     Avgs = np.zeros((n_units, n_units))
     Sds = np.zeros((n_units, n_units))
-    
+
     pca = PCA(n_components=n_comp)
     X = pca.fit_transform(Waveforms.T)
 
-    for i,unit_a in enumerate(units):
+    for i, unit_a in enumerate(units):
         for j, unit_b in enumerate(units):
             ix_a = SpikeInfo.groupby([unit_column, 'good']).get_group((unit_a, True))['id']
             ix_b = SpikeInfo.groupby([unit_column, 'good']).get_group((unit_b, True))['id']
-            T_a = X[ix_a,:]
-            T_b = X[ix_b,:]
+            T_a = X[ix_a, :]
+            T_b = X[ix_b, :]
             D_pw = metrics.pairwise.euclidean_distances(T_a, T_b)
-            Avgs[i,j] = np.average(D_pw)
-            Sds[i,j] = np.std(D_pw)
+            Avgs[i, j] = np.average(D_pw)
+            Sds[i, j] = np.std(D_pw)
     return Avgs, Sds
+
 
 def best_merge(Avgs, Sds, units, alpha=1, exclude=[]):
     """
     merge two units if their average between distance is lower than within distance.
     SD scaling by factor alpha regulates aggressive vs. conservative merging
     the larger alpha, the more agressive
-    
+
     exclude is a list of rejected merges pairs
 
     returns proposed merge
     """
 
     Q = copy.copy(Avgs)
-    
-    for i in range(Avgs.shape[0]):
-        Q[i,i] = Avgs[i,i] + alpha * Sds[i,i]
 
-    merge_candidates = list(zip(np.arange(Q.shape[0]), np.argmin(Q,1)))
+    for i in range(Avgs.shape[0]):
+        Q[i, i] = Avgs[i, i] + alpha * Sds[i, i]
+
+    merge_candidates = list(zip(np.arange(Q.shape[0]), np.argmin(Q, 1)))
     for i in range(Q.shape[0]):
-        if (i,i) in merge_candidates:
-            merge_candidates.remove((i,i))
-  
+        if (i, i) in merge_candidates:
+            merge_candidates.remove((i, i))
+
     if len(exclude) > 0:
         for exclude_pair in exclude:
             pair = tuple([units.index(e) for e in exclude_pair])
