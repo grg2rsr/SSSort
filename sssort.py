@@ -280,7 +280,7 @@ SpikeInfo['unit_0'] = spike_labels
 
 # get clean waveforms
 n_neighbors = Config.getint('spike model', 'template_reject')
-reject_spikes(Waveforms, SpikeInfo, 'unit_0', n_neighbors, verbose=True)
+SpikeInfo = reject_spikes(Waveforms, SpikeInfo, 'unit_0', n_neighbors, verbose=True)
 
 # unassign spikes if unit has too little good spikes
 SpikeInfo = reject_unit(SpikeInfo, 'unit_0')
@@ -296,10 +296,9 @@ SpikeInfo = reject_unit(SpikeInfo, 'unit_0')
  #### ##    ## ####    ##    
  
 """
-# first ini run
 logger.info(' - initializing algorithm - ')
 
-# rate est
+# rate estimation
 kernel_slow = Config.getfloat('kernels', 'sigma_slow')
 kernel_fast = Config.getfloat('kernels', 'sigma_fast')
 calc_update_frates(SpikeInfo, 'unit_0', kernel_fast, kernel_slow)
@@ -310,9 +309,10 @@ Models = train_Models(SpikeInfo, 'unit_0', Waveforms, n_comp=n_model_comp)
 outpath = plots_folder / ("Models_ini" + fig_format)
 plot_Models(Models, save=outpath)
 
-# plotting waveforms
+# plot waveforms
 outpath = plots_folder / ("waveforms_init" + fig_format)
 plot_waveforms(Waveforms, SpikeInfo, dt.rescale(pq.ms).magnitude, unit_column='unit_0', N=100, save=outpath)
+
 """
  
  #### ######## ######## ########     ###    ######## ######## 
@@ -325,7 +325,6 @@ plot_waveforms(Waveforms, SpikeInfo, dt.rescale(pq.ms).magnitude, unit_column='u
  
 """
 
-# SpikeInfo['unit_0'] = SpikeInfo['unit']
 units = get_units(SpikeInfo, 'unit_0')
 n_units = len(units)
 
