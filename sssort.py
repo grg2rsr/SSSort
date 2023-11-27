@@ -68,7 +68,7 @@ print("author: Georg Raiser - grg2rsr@gmail.com")
 
 # get config
 if len(sys.argv) == 1:
-    config_path = Path("/home/georg/code/SSSort/example_config.ini")
+    config_path = Path("./example_config.ini")
 else:
     config_path = Path(os.path.abspath(sys.argv[1]))
 
@@ -78,6 +78,7 @@ Config.read(config_path)
 # handling paths and creating output directory
 data_path = Path(Config.get('path', 'data_path'))
 if not data_path.is_absolute():
+    # ToDo when starts by ~ is not absolute.
     data_path = config_path.parent / data_path
 
 exp_name = Config.get('path', 'experiment_name')
