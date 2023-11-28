@@ -294,7 +294,6 @@ def plot_fitted_spikes(Segment, j, Models, SpikeInfo, unit_column, unit_order=No
         stim_name = Path(Segment.annotations['filename']).stem
     except:
         stim_name = 'Segment %s'%(Segment.name)
-        input()
     fig.suptitle(stim_name)
     fig.tight_layout()
     fig.subplots_adjust(top=0.9)
