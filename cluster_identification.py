@@ -120,15 +120,6 @@ if len(units) != 3:
 template_A = np.load(os.path.join(sssort_path, "templates/template_A.npy"))
 template_B = np.load(os.path.join(sssort_path, "templates/template_B.npy"))
 
-if Config.get('spike detect','peak_mode') == 'negative':
-    org_v_base = (np.min(template_A), np.min(template_B))
-    template_A *= -1
-    template_B *= -1
-
-    # align back to negative values 
-    # (fix: outcome from sssort is negative ¿?¿)
-    template_A -= abs(np.min(template_A)-org_v_base[0])
-    template_B -= abs(np.min(template_B)-org_v_base[1])
 
 # templates and waveforms need to be put on comparable shape and size
 tmid_a = np.argmax(template_A)
