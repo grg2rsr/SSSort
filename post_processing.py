@@ -152,8 +152,8 @@ ifs = int(fs/1000)   # sampling rate in kHz as integer value to convert ms to bi
 kernel_fast = Config.getfloat('kernels', 'sigma_fast')
 calc_update_final_frates(SpikeInfo, unit_column, kernel_fast)
 
-templates_path = config_path.parent / results_folder / "Templates.npy"
-Templates = np.load(templates_path)
+waveforms_path = config_path.parent / results_folder / "Waveforms.npy"
+Waveforms = np.load(waveforms_path)
 logger.info('templates read from %s' % templates_path)
 n_model_comp = Config.getint('spike model', 'n_model_comp')
 
@@ -161,7 +161,7 @@ n_model_comp = Config.getint('spike model', 'n_model_comp')
 spike_model_type = Config.get('postprocessing', 'spike_model_type')
 
 spike_model = Spike_Model if spike_model_type == "individual" else Spike_Model_Nlin 
-Models = train_Models(SpikeInfo, unit_column, Templates, n_comp=n_model_comp, verbose=True, model_type=spike_model)
+Models = train_Models(SpikeInfo, unit_column, Waveforms, n_comp=n_model_comp, verbose=True, model_type=spike_model)
 
 unit_ids = SpikeInfo[unit_column]
 units = get_units(SpikeInfo, unit_column)
