@@ -7,11 +7,34 @@ from functions_post_processing import *
 from sys import path
 
 import configparser
-#import tracemalloc
 import gc
 
-# banner
-# print(banner)
+# logging
+import logging
+
+log_fmt = "%(asctime)s - %(levelname)s - %(message)s"
+date_fmt = '%Y-%m-%d %H:%M:%S'
+formatter = logging.Formatter(log_fmt, datefmt=date_fmt)
+
+# for printing to stdout
+logger = logging.getLogger()  # get all loggers
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
+logging.getLogger('functions').setLevel(logging.INFO)
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(formatter)
+logger.addHandler(stream_handler)
+logger.setLevel(logging.DEBUG)
+
+# logging unhandled exceptions
+
+
+def handle_unhandled_exception(exc_type, exc_value, exc_traceback):
+    # TODO make this cleaner that it doesn't use global namespace
+    logging.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+
+sys.excepthook = handle_unhandled_exception
+
 
 plt.rcParams.update({'font.size': 6})
 
@@ -27,9 +50,15 @@ plt.rcParams.update({'font.size': 6})
 
 # insert row *after* idx
 def insert_row(df, idx, df_insert):
-    dfA = df.iloc[:idx+1, ]
-    dfB = df.iloc[idx+1:, ]
-    df = dfA.append(df_insert).append(dfB).reset_index(drop = True)
+    dfA = df.iloc[:idx+1, ].copy()
+    dfB = df.iloc[idx+1:, ].copy()
+    df_insert = pd.DataFrame([df_insert], columns=df.columns)
+
+    # Iterate over the columns and force the same data type as in df_insert
+    for column in df.columns:
+        df_insert[column] = df_insert[column].astype(df[column].dtype)
+
+    df = pd.concat([dfA, df_insert, dfB]).reset_index(drop=True)
     return df
 
 # delete row at idx
@@ -63,10 +92,10 @@ config_path = Path(os.path.abspath(sys.argv[1]))
 sssort_path = os.path.dirname(os.path.abspath(sys.argv[0]))
 Config = configparser.ConfigParser()
 Config.read(config_path)
-print_msg('config file read from %s' % config_path)
+logger.info('config file read from %s' % config_path)
 
 # get segment to analyse
-seg_no = Config.getint('general', 'segment_number')
+seg_no = Config.getint('postprocessing', 'segment_number')
 
 # handling paths and creating outunits.sort()put directory
 data_path = Path(Config.get('path', 'data_path'))
@@ -75,54 +104,72 @@ if not data_path.is_absolute():
 
 exp_name = Config.get('path', 'experiment_name')
 results_folder = config_path.parent / exp_name / 'results'
-plots_folder = results_folder / 'plots' / 'post_process_all' 
+plots_folder = results_folder / 'plots_post' / 'post_process_all' 
 
 os.makedirs(plots_folder, exist_ok=True)
 
-Blk = get_data(results_folder / "result.dill")
-SpikeInfo = pd.read_csv(results_folder / "SpikeInfo.csv")
+# config logger for writing to file
+file_handler = logging.FileHandler(filename="%s.log" % exp_name, mode='w')
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
+#plot config
+# plotting_changes = Config.getboolean('postprocessing','plot_changes')
+mpl.rcParams['figure.dpi'] = Config.get('output','fig_dpi')
+fig_format = Config.get('output','fig_format')
+
+
+# Load necessary data
+
+# Load block
+Blk = get_data(results_folder / "result.dill")
+
+# Load SpikeInfo
+error_msg="It appears that you have not yet labeled the spike clusters. Run cluster_identification.py first"
+try:
+    SpikeInfo = pd.read_csv(results_folder / "SpikeInfo_post.csv")
+except:
+    logger.info(error_msg)
+    exit()
+    
 if 'unit_labeled' not in SpikeInfo.columns:
-    print_msg("It appears that you have not yet labeled the spike clusters. Run cluster_identification.py first")
+    logger.info(error_msg)
     exit()
     
 unit_column = 'unit_labeled'
 SpikeInfo = SpikeInfo.astype({'id': str, unit_column: str})
 units = get_units(SpikeInfo, unit_column)
 
-#plot config
-plotting_changes = Config.getboolean('postprocessing','plot_changes')
-mpl.rcParams['figure.dpi'] = Config.get('output','fig_dpi')
-fig_format = Config.get('output','fig_format')
-
 stimes = SpikeInfo['time']
 seg = Blk.segments[seg_no]
-fs = np.float(seg.analogsignals[0].sampling_rate)
+fs = np.float64(seg.analogsignals[0].sampling_rate)
 ifs = int(fs/1000)   # sampling rate in kHz as integer value to convert ms to bins NOTE: assumes sampling rate divisible by 1000
+
+### Train models 
 
 # recalculate the latest firing rates according to spike assignments in unit_column
 #kernel_slow = Config.getfloat('kernels','sigma_slow')
 kernel_fast = Config.getfloat('kernels', 'sigma_fast')
 calc_update_final_frates(SpikeInfo, unit_column, kernel_fast)
 
-templates_path = config_path.parent / results_folder / "Templates_ini.npy"
+templates_path = config_path.parent / results_folder / "Templates.npy"
 Templates = np.load(templates_path)
-print_msg('templates read from %s' % templates_path)
+logger.info('templates read from %s' % templates_path)
 n_model_comp = Config.getint('spike model', 'n_model_comp')
 
 
 spike_model_type = Config.get('postprocessing', 'spike_model_type')
 
-# TODO ask TN about this
-# spike_model = Spike_Model if spike_model_type == "individual" else Spike_Model_Nlin 
-# Models = train_Models(SpikeInfo, unit_column, Templates, n_comp=n_model_comp, verbose=True, model_type=spike_model)
-Models = train_Models(SpikeInfo, unit_column, Templates, n_comp=n_model_comp, verbose=True)
+spike_model = Spike_Model if spike_model_type == "individual" else Spike_Model_Nlin 
+Models = train_Models(SpikeInfo, unit_column, Templates, n_comp=n_model_comp, verbose=True, model_type=spike_model)
 
 unit_ids = SpikeInfo[unit_column]
 units = get_units(SpikeInfo, unit_column)
 frate = {}
 for unit in units:
     frate[unit] = SpikeInfo['frate_'+unit]
+
+##########################################################################################
 
 sz_wd = Config.getfloat('postprocessing', 'spike_window_width')
 align_mode = Config.get('postprocessing', 'vertical_align_mode')
@@ -133,15 +180,14 @@ d_reject = Config.getfloat('postprocessing', 'min_dist_for_auto_reject')
 min_diff = Config.getfloat('postprocessing', 'min_diff_for_auto_accept')
 wsize = Config.getfloat('spike detect', 'wsize')
 max_spike_diff = int(Config.getfloat('postprocessing', 'max_compound_spike_diff') * ifs)
-n_samples = np.array(Config.get('spike model', 'template_window').split(','), dtype='float32')/1000.0
+n_samples = np.array(Config.get('postprocessing', 'template_window').split(','), dtype='float32')/1000.0
 n_samples = np.array(n_samples*fs, dtype=int)
 
 try:
     spkr = Config.get('postprocessing', 'spike_range').replace(' ','').split(',')
-    print(type(SpikeInfo['id']))
     spike_range = range(pd.Index(SpikeInfo['id']).get_loc(spkr[0]), pd.Index(SpikeInfo['id']).get_loc(spkr[1]))
 except:
-    print_msg("spike index range not valid, reverting to processing all")
+    logger.info("spike index range not valid, reverting to processing all")
     spike_range = range(1, len(unit_ids)-1)
 spike_label_interval =  Config.getint('output','spike_label_interval')
     
@@ -165,7 +211,7 @@ n_wdh = n_wd//2
 
 new_column = 'unit_final'
 if new_column not in SpikeInfo.keys():
-    SpikeInfo[new_column] = ' '
+    SpikeInfo[new_column] = SpikeInfo['unit_labeled']
 offset= 0   # will keep track of shifts due to inserted and deleted spikes 
 # don't consider first and last spike to avoid corner cases; these do not matter in practice anyway
 #tracemalloc.start()
@@ -176,142 +222,149 @@ for i in spike_range:
         continue
     start = int((float(stimes[i])*1000-sz_wd/2)*ifs)
     stop  = start+n_wd
-    if (start > 0) and (stop < len(asig)):   # only do something if the spike is not too close to the start or end of the recording, otherwise ignore
-        v  = np.array(asig[start:stop],dtype= float)
-        v = align_to(v,align_mode)
-        d = []
-        sh = []
-        un = []
-        templates = {}
-        for unit in units[:2]:
-            templates[unit]= make_single_template(Models[unit], frate[unit][i])
-            templates[unit]= align_to(templates[unit], align_mode)
-            for pos in range(n_wdh-same_spike_tolerance,n_wdh + same_spike_tolerance):
-                d.append(dist(v, templates[unit], n_samples,pos))
-                sh.append(pos)
-                un.append(unit)
-        d2 = []
-        sh2 = []
-        for pos1 in range(n_wd):
-            for pos2 in range(n_wd):
-                # one of the spikes must be close to the spike time under consideration
-                if ((abs(pos1-n_wdh) <= same_spike_tolerance) or (abs(pos2-n_wdh) <= same_spike_tolerance)) and (abs(pos1-pos2) < max_spike_diff):
-                    d2.append(compound_dist(v, templates['A'], templates['B'], n_samples, pos1, pos2))
-                    sh2.append((pos1, pos2))
 
-        # work out the final decision
-        best = np.argmin(d)
-        best2 = np.argmin(d2)
-        d_min = min(d[best], d2[best2])
-        choice = 1 if d[best] <= d2[best2] else 2
-        d_diff = abs(d[best]-d2[best2])
-        print_msg("Spike {}: Single spike d={}, compound spike d={}, difference={}".format(SpikeInfo['id'][i+offset], ('%.4f' % d[best]), ('%.4f' % d2[best2]), ('%.4f' % d_diff)))
-        zoom = (float(stimes[i])-sz_wd/1000*20,float(stimes[i])+sz_wd/1000*20)
-        if d_min >= d_accept or 200*d_diff/(d[best]+d2[best2]) < min_diff:
-            # make plots and save them
-            fig2, ax2 = plot_fitted_spikes(seg, Models, SpikeInfo, new_column, zoom=zoom, box=(float(stimes[i]),sz_wd/1000), wsize=n_samples, spike_label_interval=spike_label_interval)
-            outpath = plots_folder / (str(SpikeInfo['id'][i+offset]) + '_context_plot' + fig_format)
-            fig2.savefig(outpath)
-            fig, ax = plt.subplots(ncols=2, sharey= True, figsize=[ 4, 2])
-            dist(v,templates[un[best]], n_samples, sh[best], unit=un[best], ax=ax[0])
-            ax[0].set_ylim(y_lim)
-            compound_dist(v, templates['A'], templates['B'], n_samples, sh2[best2][0], sh2[best2][1], ax[1])
-            ax[1].set_ylim(y_lim)
-            outpath = plots_folder / (str(SpikeInfo['id'][i+offset]) + '_template_matches' + fig_format)
-            fig.savefig(outpath)
-            if d_min > d_reject:
-                choice = 0
-            else:
-                # show some plots first
-                fig2.show()
-                fig.show()
-                # ask user
-                if (200*d_diff/(d[best]+d2[best2]) <= min_diff):
-                    reason= "two very close matches"
-                elif d_min >= d_accept:
-                    reason= "no good match but not bad enough to reject"
-                print("User feedback required: "+reason)
-                choice = " "
-                while choice not in ["0", "1", "2"]:
-                    choice= input("Single spike (1), Compound spike (2), no spike (0)? ")
-                choice = int(choice)
-            plt.close(fig2)
-            plt.close(fig)
-        # apply choice 
-        if choice == 1:
-            # it's a single spike - choose the appropriate single spike unit
-            peak_pos = np.argmax(templates[un[best]])
-            peak_diff = peak_pos-n_samples[0]   # difference in actual peak pos compared where it should be
-            spike_time = stimes[i]+np.float((sh[best]-n_wdh+peak_diff))/fs  # spike time in seconds
-            if (abs(stimes[i+1]-spike_time)*fs < max_spike_diff):
-                skip= True
-                # this spike was recorded within compound spike distance before
-                if 'B' in str(SpikeInfo['id'][i+1+offset]):
-                    # this is a spike entry that was previously created by DroSort, delete
-                    print_msg("Spike {}: time= {}: Single spike, was type {} now of type {}, time {}. Conflicting spike {}; deleted {}".format(SpikeInfo['id'][i+offset],('%.4f' % stimes[i]),SpikeInfo[unit_column][i+offset],un[best],('%.4f' % spike_time),SpikeInfo['id'][i+1+offset],SpikeInfo['id'][i+1+offset]))
-                    SpikeInfo = delete_row(SpikeInfo, i+1+offset)
-                    offset -= 1
-                else:
-                    # this is a detected spike, keep for further reference
-                    print_msg("Spike {}: time= {}: Single spike, was type {} now of type {}, time {}. Conflicting spike {}; marked {} for deletion (-2)".format(SpikeInfo['id'][i+offset],('%.4f' % stimes[i]),SpikeInfo[unit_column][i+offset],un[best],('%.4f' % spike_time),SpikeInfo['id'][i+1+offset],SpikeInfo['id'][i+1+offset]))
-                    SpikeInfo[new_column][i+offset]= '-2'
-                    SpikeInfo['good'][i+offset]= False
-                    SpikeInfo['frate_fast'][i+offset]= SpikeInfo['frate_'+un[best]][i+offset]
-            else:
-                # spike isn't duplicated, normal assignment of a single spike
-                print_msg("Spike {}: time= {}: Single spike, was type {}, now  of type {}, time= {}".format(SpikeInfo['id'][i+offset],('%.4f' % stimes[i]),SpikeInfo[unit_column][i+offset],un[best],('%.4f' % spike_time)))
-                SpikeInfo[new_column][i+offset] = un[best]
-                SpikeInfo['time'][i+offset] = spike_time
-                SpikeInfo['frate_fast'][i+offset] = SpikeInfo['frate_'+un[best]][i+offset]
-        elif choice == 2:
-            # it's a compound spike - choose the appropriate spike unit and handle second spike
-            orig_spike = np.argmin(abs(np.array(sh2[best2])-n_wdh))
-            other_spike = 1-orig_spike
-            spike_unit = 'A' if orig_spike == 0 else 'B'
-            peak_pos = np.argmax(templates[spike_unit])
-            peak_diff = peak_pos-n_samples[0]   # difference in actual peak pos compared where it should be
-            spike_time = stimes[i]+np.float(sh2[best2][orig_spike]-n_wdh+peak_diff)/fs  # spike time in seconds
-            print_msg("Spike {}: time= {}: Compound spike, first spike of type {}, time= {}".format(SpikeInfo['id'][i+offset],('%.4f' % SpikeInfo['time'][i+offset]),spike_unit,('%.4f' % spike_time)))
-            SpikeInfo[new_column][i+offset] = spike_unit
-            SpikeInfo['time'][i+offset] = spike_time
-            SpikeInfo['good'][i+offset] = False   # do not use compound spikes for Model building
-            SpikeInfo['frate_fast'][i+offset] = SpikeInfo['frate_'+spike_unit][i+offset]
-            o_spike_id = i+1
-            o_spike_unit = 'A' if other_spike == 0 else 'B'
-            peak_pos = np.argmax(templates[o_spike_unit])
-            peak_diff = peak_pos-n_samples[0]   # difference in actual peak pos compared where it should be
-            o_spike_time = stimes[i]+np.float(sh2[best2][other_spike]-n_wdh+peak_diff)/fs  # spike time in seconds
-            found = False
-            for j in [i-1, i+1]:
-                if abs(stimes[j]-o_spike_time)*fs < same_spike_tolerance:
-                    # the other spike coincides with the previous spike in the original list
-                    # make sure that the previous decision is consistent with the current one
-                    print_msg("Spike {}: time= {}: Compound spike, second spike was known as {}, now of type {}, time= {}".format(SpikeInfo['id'][i+offset],('%.4f' % SpikeInfo['time'][i+offset]),SpikeInfo[unit_column][o_spike_id+offset],o_spike_unit,('%.4f' % o_spike_time)))
-                    SpikeInfo[new_column][o_spike_id+offset] = o_spike_unit
-                    SpikeInfo['good'][o_spike_id+offset] = False   # do not use compound spikes for Model building
-                    SpikeInfo['frate_fast'][o_spike_id+offset] = SpikeInfo['frate_'+o_spike_unit][o_spike_id+offset]
-                    found = True
-                    if j == i+1:
-                        skip = True
-                    break
-            if not found:
-                # the other spike does not yet exist in the list: insert new row
-                print_msg("Spike {}: Compound spike, second spike was undetected, inserted new spike of type {}, time= {}".format(SpikeInfo['id'][i+offset],o_spike_unit,o_spike_time))
-                SpikeInfo = insert_spike(SpikeInfo, new_column, i+offset, o_spike_time, o_spike_unit)
-                offset += 1
-            
+    if not ((start > 0) and (stop < len(asig))):   # only do something if the spike is not too close to the start or end of the recording, otherwise ignore
+        continue
+
+    # spikes are not borders:
+    v  = np.array(asig[start:stop],dtype= float)
+    v = align_to(v,align_mode)
+    d = []
+    sh = []
+    un = []
+    templates = {}
+    for unit in units[:2]:
+        templates[unit]= make_single_template(Models[unit], frate[unit][i])
+        templates[unit]= align_to(templates[unit], align_mode)
+        for pos in range(n_wdh-same_spike_tolerance,n_wdh + same_spike_tolerance):
+            d.append(dist(v, templates[unit], n_samples,pos))
+            sh.append(pos)
+            un.append(unit)
+    d2 = []
+    sh2 = []
+    for pos1 in range(n_wd):
+        for pos2 in range(n_wd):
+            # one of the spikes must be close to the spike time under consideration
+            if ((abs(pos1-n_wdh) <= same_spike_tolerance) or (abs(pos2-n_wdh) <= same_spike_tolerance)) and (abs(pos1-pos2) < max_spike_diff):
+                d2.append(compound_dist(v, templates['A'], templates['B'], n_samples, pos1, pos2))
+                sh2.append((pos1, pos2))
+
+    # work out the final decision
+    best = np.argmin(d)
+    best2 = np.argmin(d2)
+    d_min = min(d[best], d2[best2])
+    choice = 1 if d[best] <= d2[best2] else 2
+    d_diff = abs(d[best]-d2[best2])
+    logger.info("Spike {}: Single spike d={}, compound spike d={}, difference={}".format(SpikeInfo['id'][i+offset], ('%.4f' % d[best]), ('%.4f' % d2[best2]), ('%.4f' % d_diff)))
+    zoom = (float(stimes[i])-sz_wd/1000*20,float(stimes[i])+sz_wd/1000*20)
+    if d_min >= d_accept or 200*d_diff/(d[best]+d2[best2]) < min_diff:
+        # make plots and save them
+        colors = get_colors(['A','B'], keep=False)
+        fig2, ax2 = plot_fitted_spikes_pp(seg, Models, SpikeInfo, new_column, zoom=zoom, box=(float(stimes[i]),sz_wd/1000), wsize=n_samples, spike_label_interval=spike_label_interval, colors=colors)
+        outpath = plots_folder / (str(SpikeInfo['id'][i+offset]) + '_context_plot' + fig_format)
+        ax2[1].plot(stimes[i], 1, '.', color='y')
+
+        fig2.savefig(outpath)
+
+        fig, ax = plt.subplots(ncols=2, sharey= True, figsize=[ 4, 2])
+        dist(v,templates[un[best]], n_samples, sh[best], unit=un[best], ax=ax[0])
+        ax[0].set_ylim(y_lim)
+        compound_dist(v, templates['A'], templates['B'], n_samples, sh2[best2][0], sh2[best2][1], ax[1])
+        ax[1].set_ylim(y_lim)
+        outpath = plots_folder / (str(SpikeInfo['id'][i+offset]) + '_template_matches' + fig_format)
+        fig.savefig(outpath)
+        if d_min > d_reject:
+            choice = 0
         else:
-            # it's a non-spike - delete it or mark for deletion
-            print(SpikeInfo['id'][i+offset])
-            print(type(SpikeInfo['id'][i+offset]))
-            if 'B' in str(SpikeInfo['id'][i+offset]):   # this is a spike entry that was previously created by DroSort, delete
-                SpikeInfo= delete_row(SpikeInfo, i+offset)
-                print_msg("Spike {}: Not a spike, inserted by DroSort previously, row removed".format(SpikeInfo['id'][i+offset]))
+            # show some plots first
+            fig2.show()
+            fig.show()
+            # ask user
+            if (200*d_diff/(d[best]+d2[best2]) <= min_diff):
+                reason= "two very close matches"
+            elif d_min >= d_accept:
+                reason= "no good match but not bad enough to reject"
+            print("User feedback required: "+reason)
+            choice = " "
+            while choice not in ["0", "1", "2"]:
+                choice= input("Single spike (1), Compound spike (2), no spike (0)? ")
+            choice = int(choice)
+        plt.close(fig2)
+        plt.close(fig)
+  
+    # apply choice 
+    if choice == 1:
+        # it's a single spike - choose the appropriate single spike unit
+        peak_pos = np.argmax(templates[un[best]])
+        peak_diff = peak_pos-n_samples[0]   # difference in actual peak pos compared where it should be
+        spike_time = stimes[i]+np.float64((sh[best]-n_wdh+peak_diff))/fs  # spike time in seconds
+        if (abs(stimes[i+1]-spike_time)*fs < max_spike_diff):
+            skip= True
+            # this spike was recorded within compound spike distance before
+            if 'B' in str(SpikeInfo['id'][i+1+offset]):
+                # this is a spike entry that was previously created by DroSort, delete
+                logger.info("Spike {}: time= {}: Single spike, was type {} now of type {}, time {}. Conflicting spike {}; deleted {}".format(SpikeInfo['id'][i+offset],('%.4f' % stimes[i]),SpikeInfo[unit_column][i+offset],un[best],('%.4f' % spike_time),SpikeInfo['id'][i+1+offset],SpikeInfo['id'][i+1+offset]))
+                SpikeInfo = delete_row(SpikeInfo, i+1+offset)
                 offset -= 1
-            else:   # this is a detected spike, keep for further reference
-                SpikeInfo[new_column][i+offset] = '-2'
-                SpikeInfo['good'][i+offset] = False   # definitively do not use for model building
-                print_msg("Spike {}: Not a spike, marked for deletion (-2)".format(SpikeInfo['id'][i+offset]))
+            else:
+                # this is a detected spike, keep for further reference
+                logger.info("Spike {}: time= {}: Single spike, was type {} now of type {}, time {}. Conflicting spike {}; marked {} for deletion (-2)".format(SpikeInfo['id'][i+offset],('%.4f' % stimes[i]),SpikeInfo[unit_column][i+offset],un[best],('%.4f' % spike_time),SpikeInfo['id'][i+1+offset],SpikeInfo['id'][i+1+offset]))
+                SpikeInfo[new_column][i+offset]= '-2'
+                SpikeInfo['good'][i+offset]= False
+                SpikeInfo['frate_fast'][i+offset]= SpikeInfo['frate_'+un[best]][i+offset]
+        else:
+            # spike isn't duplicated, normal assignment of a single spike
+            logger.info("Spike {}: time= {}: Single spike, was type {}, now  of type {}, time= {}".format(SpikeInfo['id'][i+offset],('%.4f' % stimes[i]),SpikeInfo[unit_column][i+offset],un[best],('%.4f' % spike_time)))
+            SpikeInfo[new_column][i+offset] = un[best]
+            SpikeInfo['time'][i+offset] = spike_time
+            SpikeInfo['frate_fast'][i+offset] = SpikeInfo['frate_'+un[best]][i+offset]
+    elif choice == 2:
+        # it's a compound spike - choose the appropriate spike unit and handle second spike
+        orig_spike = np.argmin(abs(np.array(sh2[best2])-n_wdh))
+        other_spike = 1-orig_spike
+        spike_unit = 'A' if orig_spike == 0 else 'B'
+        peak_pos = np.argmax(templates[spike_unit])
+        peak_diff = peak_pos-n_samples[0]   # difference in actual peak pos compared where it should be
+        spike_time = stimes[i]+np.float64(sh2[best2][orig_spike]-n_wdh+peak_diff)/fs  # spike time in seconds
+        logger.info("Spike {}: time= {}: Compound spike, first spike of type {}, time= {}".format(SpikeInfo['id'][i+offset],('%.4f' % SpikeInfo['time'][i+offset]),spike_unit,('%.4f' % spike_time)))
+        SpikeInfo[new_column][i+offset] = spike_unit
+        SpikeInfo['time'][i+offset] = spike_time
+        SpikeInfo['good'][i+offset] = False   # do not use compound spikes for Model building
+        SpikeInfo['frate_fast'][i+offset] = SpikeInfo['frate_'+spike_unit][i+offset]
+        o_spike_id = i+1
+        o_spike_unit = 'A' if other_spike == 0 else 'B'
+        peak_pos = np.argmax(templates[o_spike_unit])
+        peak_diff = peak_pos-n_samples[0]   # difference in actual peak pos compared where it should be
+        o_spike_time = stimes[i]+float(sh2[best2][other_spike]-n_wdh+peak_diff)/fs  # spike time in seconds
+        found = False
+        for j in [i-1, i+1]:
+            if abs(stimes[j]-o_spike_time)*fs < same_spike_tolerance:
+                # the other spike coincides with the previous spike in the original list
+                # make sure that the previous decision is consistent with the current one
+                logger.info("Spike {}: time= {}: Compound spike, second spike was known as {}, now of type {}, time= {}".format(SpikeInfo['id'][i+offset],('%.4f' % SpikeInfo['time'][i+offset]),SpikeInfo[unit_column][o_spike_id+offset],o_spike_unit,('%.4f' % o_spike_time)))
+                SpikeInfo[new_column][o_spike_id+offset] = o_spike_unit
+                SpikeInfo['good'][o_spike_id+offset] = False   # do not use compound spikes for Model building
+                SpikeInfo['frate_fast'][o_spike_id+offset] = SpikeInfo['frate_'+o_spike_unit][o_spike_id+offset]
+                found = True
+                if j == i+1:
+                    skip = True
+                break
+        if not found:
+            # the other spike does not yet exist in the list: insert new row
+            logger.info("Spike {}: Compound spike, second spike was undetected, inserted new spike of type {}, time= {}".format(SpikeInfo['id'][i+offset],o_spike_unit,o_spike_time))
+            SpikeInfo = insert_spike(SpikeInfo, new_column, i+offset, o_spike_time, o_spike_unit)
+            offset += 1
+        
+    else:
+        # it's a non-spike - delete it or mark for deletion
+        if 'B' in str(SpikeInfo['id'][i+offset]):   # this is a spike entry that was previously created by DroSort, delete
+            SpikeInfo= delete_row(SpikeInfo, i+offset)
+            logger.info("Spike {}: Not a spike, inserted by DroSort previously, row removed".format(SpikeInfo['id'][i+offset]))
+            offset -= 1
+        else:   # this is a detected spike, keep for further reference
+            SpikeInfo[new_column][i+offset] = '-2'
+            SpikeInfo['good'][i+offset] = False   # definitively do not use for model building
+            logger.info("Spike {}: Not a spike, marked for deletion (-2)".format(SpikeInfo['id'][i+offset]))
             
 calc_update_final_frates(SpikeInfo, unit_column, kernel_fast)
 
@@ -346,20 +399,22 @@ seg.analogsignals = asigs
 
 #save all
 units = get_units(SpikeInfo, unit_column)
-print_msg("Number of spikes in trace: %d"%SpikeInfo[new_column].size)
-print_msg("Number of clusters: %d"%len(units))
+logger.info("Number of spikes in trace: %d"%SpikeInfo[new_column].size)
+logger.info("Number of clusters: %d"%len(units))
 
 # warning firing rates not saved, too high memory use.
-save_all(results_folder, SpikeInfo, Blk, FinalSpikes=True)
+save_all(results_folder, SpikeInfo, Blk, FinalSpikes=True, f_extension='post')
 
 do_plot = Config.getboolean('postprocessing','plot_fitted_spikes')
 
 if do_plot:
-    print_msg("creating plots")
+    logger.info("creating plots")
     outpath = plots_folder / ('overview' + fig_format)
-    plot_segment(seg, units, save=outpath)
+    plot_segment(seg, units, save=outpath, colors=colors)
 
     max_window = Config.getfloat('output','max_window_fitted_spikes_overview')
-    plot_fitted_spikes_complete(seg, Models, SpikeInfo, new_column, max_window, plots_folder, fig_format, wsize=n_samples, extension='_templates', spike_label_interval=spike_label_interval)
-    print_msg("plotting done")
+    plot_fitted_spikes_complete(seg, Models, SpikeInfo, new_column, max_window,
+                             plots_folder, fig_format, wsize=n_samples, extension='_templates',
+                             spike_label_interval=spike_label_interval, colors=colors)
+    logger.info("plotting done")
 
