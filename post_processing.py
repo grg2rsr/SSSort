@@ -10,14 +10,6 @@ import configparser
 import gc
 
 
-def handle_unhandled_exception(exc_type, exc_value, exc_traceback):
-    # TODO make this cleaner that it doesn't use global namespace
-    logging.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback))
-
-
-sys.excepthook = handle_unhandled_exception
-
-
 plt.rcParams.update({'font.size': 6})
 
 """
