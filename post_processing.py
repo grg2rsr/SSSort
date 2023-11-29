@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import pandas as pd
-from sssio import * 
+import sssio
 from plotters import *
 from functions import *
 from functions_post_processing import *
@@ -8,24 +8,6 @@ from sys import path
 
 import configparser
 import gc
-
-# logging
-import logging
-
-log_fmt = "%(asctime)s - %(levelname)s - %(message)s"
-date_fmt = '%Y-%m-%d %H:%M:%S'
-formatter = logging.Formatter(log_fmt, datefmt=date_fmt)
-
-# for printing to stdout
-logger = logging.getLogger()  # get all loggers
-logging.getLogger('matplotlib').setLevel(logging.WARNING)
-logging.getLogger('functions').setLevel(logging.INFO)
-stream_handler = logging.StreamHandler()
-stream_handler.setFormatter(formatter)
-logger.addHandler(stream_handler)
-logger.setLevel(logging.DEBUG)
-
-# logging unhandled exceptions
 
 
 def handle_unhandled_exception(exc_type, exc_value, exc_traceback):
@@ -108,10 +90,8 @@ plots_folder = results_folder / 'plots_post' / 'post_process_all'
 
 os.makedirs(plots_folder, exist_ok=True)
 
-# config logger for writing to file
-file_handler = logging.FileHandler(filename="%s.log" % exp_name, mode='w')
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
+# create and config logger for writing to file
+sssio.get_logger(exp_name)
 
 #plot config
 # plotting_changes = Config.getboolean('postprocessing','plot_changes')
@@ -154,7 +134,7 @@ calc_update_final_frates(SpikeInfo, unit_column, kernel_fast)
 
 waveforms_path = config_path.parent / results_folder / "Waveforms.npy"
 Waveforms = np.load(waveforms_path)
-logger.info('templates read from %s' % templates_path)
+logger.info('templates read from %s' % waveforms_path)
 n_model_comp = Config.getint('spike model', 'n_model_comp')
 
 

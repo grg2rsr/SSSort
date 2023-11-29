@@ -128,6 +128,35 @@ def save_data(Blk, path):
     if ext == '.dill':
         blk2dill(Blk, path)
 
+def get_logger(exp_name):
+    log_fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
+    date_fmt = '%Y-%m-%d %H:%M:%S'
+    formatter = logging.Formatter(log_fmt, datefmt=date_fmt)
+
+    # for printing to stdout
+    logger = logging.getLogger()  # get all loggers
+    logging.getLogger('matplotlib').setLevel(logging.WARNING)
+    logging.getLogger('functions').setLevel(logging.INFO)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    logger.addHandler(stream_handler)
+    logger.setLevel(logging.INFO)
+    
+    sys.excepthook = handle_unhandled_exception
+
+    # config logger for writing to file
+    file_handler = logging.FileHandler(filename="%s.log" % exp_name, mode='w')
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    return logger
+
+# logging unhandled exceptions
+def handle_unhandled_exception(exc_type, exc_value, exc_traceback):
+    # TODO make this cleaner that it doesn't use global namespace
+    logging.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+
 
 if __name__ == '__main__':
     """ for command line usage - first argument being path to list file """
@@ -138,3 +167,4 @@ if __name__ == '__main__':
     Blk.segments = [seg]
     blk2dill(Blk, path.with_suffix('.dill'))
     # Blk = list2blk(path)
+

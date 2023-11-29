@@ -27,34 +27,9 @@ from functions import *
 from plotters import *
 from functions_post_processing import *
 from sssio import *
+import sssio
 
 import matplotlib.pyplot as plt 
-
-# logging
-import logging
-
-log_fmt = "%(asctime)s - %(levelname)s - %(message)s"
-date_fmt = '%Y-%m-%d %H:%M:%S'
-formatter = logging.Formatter(log_fmt, datefmt=date_fmt)
-
-# for printing to stdout
-logger = logging.getLogger()  # get all loggers
-logging.getLogger('matplotlib').setLevel(logging.WARNING)
-logging.getLogger('functions').setLevel(logging.INFO)
-stream_handler = logging.StreamHandler()
-stream_handler.setFormatter(formatter)
-logger.addHandler(stream_handler)
-logger.setLevel(logging.DEBUG)
-
-# logging unhandled exceptions
-
-
-def handle_unhandled_exception(exc_type, exc_value, exc_traceback):
-    # TODO make this cleaner that it doesn't use global namespace
-    logging.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback))
-
-
-sys.excepthook = handle_unhandled_exception
 
 
 #Load file
@@ -83,11 +58,8 @@ plots_folder = results_folder / 'plots_post'
 
 os.makedirs(plots_folder, exist_ok=True)
 
-# config logger for writing to file
-file_handler = logging.FileHandler(filename="%s.log" % exp_name, mode='w')
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
-
+# create and config logger for writing to file
+sssio.get_logger(exp_name)
 
 # Load clustering data
 Blk = get_data(results_folder  / "result.dill")

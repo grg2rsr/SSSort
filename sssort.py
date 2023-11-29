@@ -25,31 +25,6 @@ from functions import *
 from plotters import *
 import sssio
 
-# logging
-import logging
-
-log_fmt = "%(asctime)s - %(levelname)s - %(message)s"
-date_fmt = '%Y-%m-%d %H:%M:%S'
-formatter = logging.Formatter(log_fmt, datefmt=date_fmt)
-
-# for printing to stdout
-logger = logging.getLogger()  # get all loggers
-logging.getLogger('matplotlib').setLevel(logging.WARNING)
-logging.getLogger('functions').setLevel(logging.INFO)
-stream_handler = logging.StreamHandler()
-stream_handler.setFormatter(formatter)
-logger.addHandler(stream_handler)
-logger.setLevel(logging.DEBUG)
-
-# logging unhandled exceptions
-
-
-def handle_unhandled_exception(exc_type, exc_value, exc_traceback):
-    # TODO make this cleaner that it doesn't use global namespace
-    logging.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback))
-
-
-sys.excepthook = handle_unhandled_exception
 
 print("This is SSSort v1.0.0")
 print("author: Georg Raiser - grg2rsr@gmail.com")
@@ -87,10 +62,10 @@ plots_folder = results_folder / 'plots'
 os.makedirs(plots_folder, exist_ok=True)
 os.chdir(config_path.parent / exp_name)
 
-# config logger for writing to file
-file_handler = logging.FileHandler(filename="%s.log" % exp_name, mode='w')
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
+
+logger = sssio.get_logger(exp_name)
+
+
 
 logger.info('config file read from %s' % config_path)
 
@@ -462,7 +437,7 @@ for it in range(1, n_max_iter):
                 break
 
     if force_merge:
-        if len(get_units(SpikeInfo, this_unit_col, remove_unassinged=True)) == n_clust_final:
+        if len(get_units(SpikeInfo, this_unit_col, remove_unassigned=True)) == n_clust_final:
             logger.info("aborting, desired number of %i clusters reached" % n_clust_final)
             break
 
