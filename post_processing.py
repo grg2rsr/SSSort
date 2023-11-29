@@ -133,7 +133,7 @@ n_model_comp = Config.getint('spike model', 'n_model_comp')
 spike_model_type = Config.get('postprocessing', 'spike_model_type')
 
 spike_model = Spike_Model if spike_model_type == "individual" else Spike_Model_Nlin 
-Models = train_Models(SpikeInfo, unit_column, Waveforms, n_comp=n_model_comp, verbose=True, model_type=spike_model)
+Models = train_Models(SpikeInfo, unit_column, Waveforms, n_comp=n_model_comp, model_type=spike_model)
 
 unit_ids = SpikeInfo[unit_column]
 units = get_units(SpikeInfo, unit_column)
