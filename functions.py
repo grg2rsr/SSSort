@@ -65,13 +65,21 @@ def sort_units(units):
     return list(units)
 
 
-def get_units(SpikeInfo, unit_column, remove_unassinged=True):
+def get_units(SpikeInfo, unit_column, remove_unassigned=True):
     """ helper that returns all units in a given unit column, with or without unassigned """
     units = list(pd.unique(SpikeInfo[unit_column]))
-    if remove_unassinged:
-        if '-1' in units:
-            units.remove('-1')
-    return sort_units(units)
+
+    if remove_unassigned:
+        for unassigned_unit in ['-1', '-2']:
+            if unassigned_unit in units:
+                units.remove(unassigned_unit)
+
+    # Check if all units are digits, and sort if needed
+    if all(unit.isdigit() for unit in units):
+        units = sort_units(units)
+
+    return units
+
 
 
 def reject_unit(SpikeInfo, unit_column, min_good=80):
@@ -101,7 +109,7 @@ def get_changes(SpikeInfo, unit_column):
 
     # has received spikes from?
     Changes = {}
-    for unit in get_units(SpikeInfo, this_unit_col, remove_unassinged=False):
+    for unit in get_units(SpikeInfo, this_unit_col, remove_unassigned=False):
         S = SpikeInfo.loc[SpikeInfo[this_unit_col] == unit, prev_unit_col]
         Changes[unit] = S.value_counts().to_dict()
 
@@ -368,8 +376,8 @@ def est_rate(spike_times, eval_times, sig):
 def calc_update_frates(SpikeInfo, unit_column, kernel_fast, kernel_slow):
     """ calculate all firing rates for all units, based on unit_column. Updates SpikeInfo """
 
-    from_units = get_units(SpikeInfo, unit_column, remove_unassinged=True)
-    to_units = get_units(SpikeInfo, unit_column, remove_unassinged=False)
+    from_units = get_units(SpikeInfo, unit_column, remove_unassigned=True)
+    to_units = get_units(SpikeInfo, unit_column, remove_unassigned=False)
 
     # estimating firing rate profile for "from unit" and getting the rate at "to unit" timepoints
     SIgroups = SpikeInfo.groupby([unit_column, 'segment'])
