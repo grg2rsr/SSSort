@@ -227,11 +227,15 @@ for i in spike_range:
     d_min = min(d[best], d2[best2])
     choice = 1 if d[best] <= d2[best2] else 2
     d_diff = abs(d[best]-d2[best2])
+    
     logger.info("Spike {}: Single spike d={}, compound spike d={}, difference={}".format(SpikeInfo['id'][i+offset], ('%.4f' % d[best]), ('%.4f' % d2[best2]), ('%.4f' % d_diff)))
+    
+    # plot params
     zoom = (float(stimes[i])-sz_wd/1000*20,float(stimes[i])+sz_wd/1000*20)
+    colors = get_colors(['A','B'], keep=False)
+
     if d_min >= d_accept or 200*d_diff/(d[best]+d2[best2]) < min_diff:
         # make plots and save them
-        colors = get_colors(['A','B'], keep=False)
         fig2, ax2 = plot_fitted_spikes_pp(seg, Models, SpikeInfo, new_column, zoom=zoom, box=(float(stimes[i]),sz_wd/1000), wsize=n_samples, spike_label_interval=spike_label_interval, colors=colors)
         outpath = plots_folder / (str(SpikeInfo['id'][i+offset]) + '_context_plot' + fig_format)
         ax2[1].plot(stimes[i], 1, '.', color='y')
@@ -261,6 +265,7 @@ for i in spike_range:
             while choice not in ["0", "1", "2"]:
                 choice= input("Single spike (1), Compound spike (2), no spike (0)? ")
             choice = int(choice)
+
         plt.close(fig2)
         plt.close(fig)
   
@@ -375,7 +380,7 @@ logger.info("Number of spikes in trace: %d"%SpikeInfo[new_column].size)
 logger.info("Number of clusters: %d"%len(units))
 
 # warning firing rates not saved, too high memory use.
-save_all(results_folder, SpikeInfo, Blk, FinalSpikes=True, f_extension='post')
+save_all(results_folder, SpikeInfo, Blk, logger, FinalSpikes=True, f_extension='post')
 
 do_plot = Config.getboolean('postprocessing','plot_fitted_spikes')
 

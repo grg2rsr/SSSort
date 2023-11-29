@@ -26,7 +26,7 @@ def get_colors(units, palette='hls', desat=None, keep=True):
     else:
         n_colors = len(units)
     colors = sns.color_palette(palette, n_colors=n_colors, desat=desat)
-    # unit_ids = np.arange(n_colors).astype('U')
+
     D = dict(zip(units, colors))
     D['-1'] = (0.5, 0.5, 0.5)
     return D
@@ -563,8 +563,10 @@ def plot_fitted_spikes_pp(Segment, Models, SpikeInfo, unit_column, unit_order=No
 
     # axes[0].plot(asig.times[left:right], asig.data[left:right], color='k', lw=0.5)
     # axes[1].plot(asig.times[left:right], asig.data[left:right], color='k', lw=0.5)
-    axes[0].plot(asig.times, asig.data, color='k', lw=0.5)
-    axes[1].plot(asig.times, asig.data, color='k', lw=0.5)
+    times = np.array(asig.times)
+    data = np.array(asig.data)
+    axes[0].plot(times, data, color='k', lw=0.5)
+    axes[1].plot(times, data, color='k', lw=0.5)
 
     if zoom is not None:
         for ax in axes:
@@ -618,10 +620,10 @@ def plot_fitted_spikes_complete(seg, Models, SpikeInfo, unit_column, max_window,
         if rejs is None:
             rejs = SpikeInfo["time"][SpikeInfo[unit_column] == '-2']
 
-        plot_function(seg, Models, SpikeInfo, unit_column, zoom=zoom, save=outpath, wsize=wsize, rejs=rejs, spike_label_interval=spike_label_interval)
+        plot_function(seg, Models, SpikeInfo, unit_column, zoom=zoom, save=outpath, wsize=wsize, rejs=rejs, spike_label_interval=spike_label_interval, colors=colors)
 
 
-def plot_means(means, units, waveform_a, waveform_b, asigs, outpath=None, show=False, colors=None):
+def plot_means(means, units, template_a, template_b, asigs, outpath=None, show=False, colors=None):
     fig, axes = plt.subplots(ncols=len(units), figsize=[len(units) * 3, 4])
 
     if colors is None:
@@ -630,8 +632,8 @@ def plot_means(means, units, waveform_a, waveform_b, asigs, outpath=None, show=F
     for i, (mean, unit) in enumerate(zip(means, units)):
         axes[i].plot(mean, label=unit, color='k', linewidth=0.7)
         axes[i].plot(mean, color=colors[asigs[unit]], alpha=0.3, linewidth=5)
-        axes[i].plot(waveform_a, label="A", color=colors['A'], linewidth=0.7)
-        axes[i].plot(waveform_b, label="B", color=colors['B'], linewidth=0.7)
+        axes[i].plot(template_a, label="A", color=colors['A'], linewidth=0.7)
+        axes[i].plot(template_b, label="B", color=colors['B'], linewidth=0.7)
         axes[i].legend()
 
     plt.tight_layout()
