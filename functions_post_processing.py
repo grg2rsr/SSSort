@@ -47,7 +47,7 @@ def calc_update_final_frates(SpikeInfo, unit_column, kernel_fast):
     """ calculate all firing rates for all units, based on unit_column. This is for after units
 have been identified as 'A' or 'B' (or unknown). Updates SpikeInfo with new columns frate_A, frate_B"""
     
-    from_units = get_units(SpikeInfo, unit_column, remove_unassigned=True)
+    from_units = get_units(SpikeInfo, unit_column)
 
     # estimating firing rate profile for "from unit" and getting the rate at "to unit" timepoints
     for j, from_unit in enumerate(from_units):
@@ -65,10 +65,10 @@ have been identified as 'A' or 'B' (or unknown). Updates SpikeInfo with new colu
             # can not set it's own rate, when there are no spikes in this segment for this unit
             pass
 
-def save_all(results_folder, SpikeInfo, Blk, FinalSpikes= False):
+def save_all(results_folder, SpikeInfo, Blk, logger, FinalSpikes= False, f_extension=''):
     # store SpikeInfo
-    outpath = results_folder / 'SpikeInfo.csv'
-    print_msg("saving SpikeInfo to %s" % outpath)
+    outpath = results_folder / ('SpikeInfo_%s.csv'%f_extension)
+    logger.info("saving SpikeInfo to %s" % outpath)
     SpikeInfo.to_csv(outpath, index= False)
 
     if FinalSpikes:
@@ -80,10 +80,10 @@ def save_all(results_folder, SpikeInfo, Blk, FinalSpikes= False):
     
     # store Block
     outpath = results_folder / 'result.dill'
-    print_msg("saving Blk as .dill to %s" % outpath)
+    logger.info("saving Blk as .dill to %s" % outpath)
     blk2dill(Blk, outpath)
 
-    print_msg("data is stored")
+    logger.info("data is stored")
 
 """
  
@@ -239,12 +239,13 @@ def dist(d, t, n_samples, pos, unit=None, ax=None):
     d2[start:stop]= d[start:stop]   # data cropped to comparison region
     dst = np.linalg.norm(d2-t2)
     if ax is not None:
-        ax.plot(d,'.', markersize=1)
-        ax.plot(d2, linewidth=0.7)
-        ax.plot(t2, linewidth=0.7)
-        ax.set_ylim(-1.2, 1.2)
-        lbl = unit + ': d=' if unit is not None else ''
+        ax.plot(d,'.',markersize=1, label='org. trace')
+        ax.plot(d2,linewidth= 0.7, label='comp. region')
+        ax.plot(t2,linewidth= 0.7, label='template')
+        ax.set_ylim(-1.2,1.2)
+        lbl= unit+': d=' if unit is not None else ''
         ax.set_title(lbl+('%.4f' % (dst/(stop-start))))
+        ax.legend()
     return dst/(stop-start)
     #return dst
 
@@ -279,18 +280,20 @@ def compound_dist(d, t1, t2, n_samples, pos1, pos2, ax=None):
 def populate_block(Blk, SpikeInfo, unit_column, units):
     for i, seg in enumerate(Blk.segments):
         spike_labels = SpikeInfo.groupby(('segment')).get_group((i))[unit_column].values
-        seg.spiketrains[0].annotations['unit_labels'] = list(spike_labels)
+        SpikeTrain, = select_by_dict(seg.spiketrains, kind='all_spikes')
+        SpikeTrain.annotations['unit_labels'] = list(spike_labels)
 
         # make spiketrains
-        St = seg.spiketrains[0]
-        spike_labels = St.annotations['unit_labels']
-        sts = [St]
-
+        spike_labels = SpikeTrain.annotations['unit_labels']
+        sts = [SpikeTrain]
         for unit in units:
-            times = St.times[sp.array(spike_labels) == unit]
-            st = neo.core.SpikeTrain(times, t_start = St.t_start, t_stop=St.t_stop)
+            times = SpikeTrain.times[np.array(spike_labels) == unit]
+            st = neo.core.SpikeTrain(times, t_start = SpikeTrain.t_start, t_stop=SpikeTrain.t_stop)
             st.annotate(unit=unit)
             sts.append(st)
-        seg.spiketrains=sts
+        seg.spiketrains = sts
+
+        asigs = [seg.analogsignals[0]]
+        seg.analogsignals = asigs
 
     return Blk
