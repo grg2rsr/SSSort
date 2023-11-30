@@ -87,7 +87,6 @@ if len(units) != 3:
     print("Three units needed, %d found in SpikeInfo"%len(units))
     exit()
 
-
 # Load model templates
 template_A = np.load(os.path.join(sssort_path, "templates/template_A.npy"))
 template_B = np.load(os.path.join(sssort_path, "templates/template_B.npy"))
@@ -104,49 +103,33 @@ if Config.get('spike detect', 'peak_mode') == 'negative':
     template_B -= abs(np.min(template_B)-org_v_base[1])
 
 # templates and waveforms need to be put on comparable shape and size
-tmid_a = np.argmax(template_A)
-tmid_b = np.argmax(template_B)
-left = np.amin([tmid_a, tmid_b, n_samples[0]])
-right = np.amin([len(template_A)-tmid_a, len(template_B)-tmid_b, n_samples[1]])
-
-template_A = template_A[tmid_a-left:tmid_a+right]
-template_B = template_B[tmid_b-left:tmid_b+right]
-Waveforms = Waveforms[n_samples[0]-left:n_samples[0]+right, :]
+template_A, template_B, Waveforms = resize_waveforms(template_A, template_B, Waveforms, n_samples)
 
 logger.info("Current units: %s" % units)
 
 distances_a = []
 distances_b = []
-means = []
 
 mode = 'peak'
 
 logger.info("Computing best assignment")
 
-# Compare units to templates
-mean_waveforms = {}
-amplitude = []
+# Average waveforms
+mean_waveforms = get_aligned_wmean_by_unit(Waveforms, SpikeInfo, units,
+                                           unit_column, mode)
 
-for unit in units:
-    unit_ids = SpikeInfo.groupby(unit_column).get_group(unit)['id']
-    waveforms = Waveforms[:, unit_ids]
+# normalize waveforms
+# get maximum amplitude for norm_factor
+max_ampl = np.max([np.max(mean_wave)-np.min(mean_wave)
+                   for unit, mean_wave in mean_waveforms.items()])
 
-    waveforms = np.array([np.array(align_to(t, mode)) for t in waveforms.T])
-
-    mean_waveforms[unit] = np.average(waveforms, axis=0)
-    amplitude.append(np.max(mean_waveforms[unit])-np.min(mean_waveforms[unit]))
-
-max_ampl = np.max(amplitude)
 norm_factor = (np.max(template_A)-np.min(template_A))/max_ampl
+normalized_means = [mean_wave*norm_factor for unit, mean_wave
+                    in mean_waveforms.items()]
 
-
-for unit in units:
-    d_a = np.linalg.norm(mean_waveforms[unit]*norm_factor-template_A)
-    d_b = np.linalg.norm(mean_waveforms[unit]*norm_factor-template_B)
-
-    distances_a.append(d_a)
-    distances_b.append(d_b)
-    means.append(mean_waveforms[unit]*norm_factor)
+# Compare waveform units to templates
+distances_a = [np.linalg.norm(mean-template_A) for mean in normalized_means]
+distances_b = [np.linalg.norm(mean-template_B) for mean in normalized_means]
 
 logger.info("Distances to a: ")
 logger.info("\t\t%s" % str(units))
@@ -161,7 +144,6 @@ b_unit = units[np.argmin(distances_b)]
 if len(units) > 2:
     non_unit = [unit for unit in units if a_unit not in unit and b_unit not in unit][0]
 
-
 asigs = {a_unit: 'A', b_unit: 'B'}
 if len(units) > 2:
     asigs[non_unit] = '?'
@@ -169,7 +151,7 @@ logger.info("Final assignation: %s" % asigs)
 
 # plot assignments
 outpath = plots_folder / ("cluster_reassignments" + fig_format)
-plot_means(means, units, template_A, template_B, asigs=asigs, outpath=outpath)
+plot_means(normalized_means, units, template_A, template_B, asigs=asigs, outpath=outpath)
 
 # create new column with reassigned labels
 SpikeInfo[new_column] = copy.deepcopy(SpikeInfo[unit_column].values)
@@ -177,6 +159,7 @@ if len(units) > 2:
     non_unit_rows = SpikeInfo.groupby(new_column).get_group(non_unit)
     SpikeInfo.loc[non_unit_rows.index, new_column] = '-2'
 
+# Relabel column to A/B
 a_unit_rows = SpikeInfo.groupby(new_column).get_group(a_unit)
 SpikeInfo.loc[a_unit_rows.index, new_column] = 'A'
 b_unit_rows = SpikeInfo.groupby(new_column).get_group(b_unit)

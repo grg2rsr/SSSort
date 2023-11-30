@@ -296,3 +296,34 @@ def compound_dist(d, t1, t2, n_samples, pos1, pos2, ax=None):
 #         seg.analogsignals = asigs
 
 #     return Blk
+
+
+def resize_waveforms(template_A, template_B, Waveforms, n_samples):
+    # get boundaries
+    tmid_a = np.argmax(template_A)
+    tmid_b = np.argmax(template_B)
+    left = np.amin([tmid_a, tmid_b, n_samples[0]])
+    right = np.amin([len(template_A)-tmid_a, len(template_B)-tmid_b, n_samples[1]])
+
+    # adjuts waveforms
+    template_A = template_A[tmid_a-left:tmid_a+right]
+    template_B = template_B[tmid_b-left:tmid_b+right]
+    Waveforms = Waveforms[n_samples[0]-left:n_samples[0]+right, :]
+
+    return template_A, template_B, Waveforms
+
+
+def get_aligned_wmean_by_unit(Waveforms, SpikeInfo, units, unit_column, mode):
+    mean_waveforms = {}
+
+    for unit in units:
+        unit_ids = SpikeInfo.groupby(unit_column).get_group(unit)['id']
+        waveforms = Waveforms[:, unit_ids]
+
+        # Align waveforms by mode
+        waveforms = np.array([np.array(align_to(t, mode)) for t in waveforms.T])
+
+        # Get mean for each unit and amplitude
+        mean_waveforms[unit] = np.average(waveforms, axis=0)
+
+    return mean_waveforms
