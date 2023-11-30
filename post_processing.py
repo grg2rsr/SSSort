@@ -7,7 +7,6 @@ from functions_post_processing import *
 from sys import path
 
 import configparser
-import gc
 
 
 plt.rcParams.update({'font.size': 6})
@@ -15,12 +14,13 @@ plt.rcParams.update({'font.size': 6})
 """
 ########  #######    #######   ##       ######
    ##    ##     ##  ##     ##  ##      ##    ##
-   ##    ##     ##  ##     ##  ##      ##     
+   ##    ##     ##  ##     ##  ##      ##
    ##    ##     ##  ##     ##  ##       ######
    ##    ##     ##  ##     ##  ##            ##
    ##    ##     ##  ##     ##  ##      ##    ##
    ##     #######    #######   #######  ######
 """
+
 
 # insert row *after* idx
 def insert_row(df, idx, df_insert):
@@ -35,9 +35,11 @@ def insert_row(df, idx, df_insert):
     df = pd.concat([dfA, df_insert, dfB]).reset_index(drop=True)
     return df
 
+
 # delete row at idx
 def delete_row(df, idx):
     return df.iloc[:idx, ].append(df.iloc[idx+1:]).reset_index(drop = True)
+
 
 # insert a new spike entry after row idx
 def insert_spike(SpikeInfo, new_column, idx, o_spike_time, o_spike_unit):
@@ -85,10 +87,10 @@ os.makedirs(plots_folder, exist_ok=True)
 # create and config logger for writing to file
 sssio.get_logger(exp_name)
 
-#plot config
+# plot config
 # plotting_changes = Config.getboolean('postprocessing','plot_changes')
 mpl.rcParams['figure.dpi'] = Config.get('output','fig_dpi')
-fig_format = Config.get('output','fig_format')
+fig_format = Config.get('output', 'fig_format')
 
 
 # Load necessary data
@@ -97,17 +99,17 @@ fig_format = Config.get('output','fig_format')
 Blk = get_data(results_folder / "result.dill")
 
 # Load SpikeInfo
-error_msg="It appears that you have not yet labeled the spike clusters. Run cluster_identification.py first"
+error_msg = "It appears that you have not yet labeled the spike clusters. Run cluster_identification.py first"
 try:
     SpikeInfo = pd.read_csv(results_folder / "SpikeInfo_post.csv")
 except:
     logger.info(error_msg)
     exit()
-    
+
 if 'unit_labeled' not in SpikeInfo.columns:
     logger.info(error_msg)
     exit()
-    
+
 unit_column = 'unit_labeled'
 SpikeInfo = SpikeInfo.astype({'id': str, unit_column: str})
 units = get_units(SpikeInfo, unit_column)
@@ -117,10 +119,10 @@ seg = Blk.segments[seg_no]
 fs = np.float64(seg.analogsignals[0].sampling_rate)
 ifs = int(fs/1000)   # sampling rate in kHz as integer value to convert ms to bins NOTE: assumes sampling rate divisible by 1000
 
-### Train models 
+### Train models
 
 # recalculate the latest firing rates according to spike assignments in unit_column
-#kernel_slow = Config.getfloat('kernels','sigma_slow')
+# kernel_slow = Config.getfloat('kernels','sigma_slow')
 kernel_fast = Config.getfloat('kernels', 'sigma_fast')
 calc_update_final_frates(SpikeInfo, unit_column, kernel_fast)
 
@@ -156,13 +158,14 @@ n_samples = np.array(Config.get('postprocessing', 'template_window').split(','),
 n_samples = np.array(n_samples*fs, dtype=int)
 
 try:
-    spkr = Config.get('postprocessing', 'spike_range').replace(' ','').split(',')
-    spike_range = range(pd.Index(SpikeInfo['id']).get_loc(spkr[0]), pd.Index(SpikeInfo['id']).get_loc(spkr[1]))
+    spkr = Config.get('postprocessing', 'spike_range').replace(' ', '').split(',')
+    spike_range = range(pd.Index(SpikeInfo['id']).get_loc(spkr[0]),
+                        pd.Index(SpikeInfo['id']).get_loc(spkr[1]))
 except:
     logger.info("spike index range not valid, reverting to processing all")
     spike_range = range(1, len(unit_ids)-1)
-spike_label_interval =  Config.getint('output','spike_label_interval')
-    
+spike_label_interval = Config.getint('output', 'spike_label_interval')
+
 asig = seg.analogsignals[0]
 asig = asig.reshape(asig.shape[0])
 as_min = np.amin(asig)
@@ -184,32 +187,32 @@ n_wdh = n_wd//2
 new_column = 'unit_final'
 if new_column not in SpikeInfo.keys():
     SpikeInfo[new_column] = SpikeInfo['unit_labeled']
-offset= 0   # will keep track of shifts due to inserted and deleted spikes 
+offset = 0   # will keep track of shifts due to inserted and deleted spikes 
 # don't consider first and last spike to avoid corner cases; these do not matter in practice anyway
-#tracemalloc.start()
+# tracemalloc.start()
 skip = False
 for i in spike_range:
     if skip:
         skip = False
         continue
     start = int((float(stimes[i])*1000-sz_wd/2)*ifs)
-    stop  = start+n_wd
+    stop = start+n_wd
 
     if not ((start > 0) and (stop < len(asig))):   # only do something if the spike is not too close to the start or end of the recording, otherwise ignore
         continue
 
     # spikes are not borders:
-    v  = np.array(asig[start:stop],dtype= float)
-    v = align_to(v,align_mode)
+    v = np.array(asig[start:stop], dtype=float)
+    v = align_to(v, align_mode)
     d = []
     sh = []
     un = []
     templates = {}
     for unit in units[:2]:
-        templates[unit]= make_single_template(Models[unit], frate[unit][i])
-        templates[unit]= align_to(templates[unit], align_mode)
-        for pos in range(n_wdh-same_spike_tolerance,n_wdh + same_spike_tolerance):
-            d.append(dist(v, templates[unit], n_samples,pos))
+        templates[unit] = make_single_template(Models[unit], frate[unit][i])
+        templates[unit] = align_to(templates[unit], align_mode)
+        for pos in range(n_wdh-same_spike_tolerance, n_wdh + same_spike_tolerance):
+            d.append(dist(v, templates[unit], n_samples, pos))
             sh.append(pos)
             un.append(unit)
     d2 = []
@@ -227,12 +230,12 @@ for i in spike_range:
     d_min = min(d[best], d2[best2])
     choice = 1 if d[best] <= d2[best2] else 2
     d_diff = abs(d[best]-d2[best2])
-    
+
     logger.info("Spike {}: Single spike d={}, compound spike d={}, difference={}".format(SpikeInfo['id'][i+offset], ('%.4f' % d[best]), ('%.4f' % d2[best2]), ('%.4f' % d_diff)))
-    
+
     # plot params
-    zoom = (float(stimes[i])-sz_wd/1000*20,float(stimes[i])+sz_wd/1000*20)
-    colors = get_colors(['A','B'], keep=False)
+    zoom = (float(stimes[i])-sz_wd/1000*20, float(stimes[i])+sz_wd/1000*20)
+    colors = get_colors(['A', 'B'], keep=False)
 
     if d_min >= d_accept or 200*d_diff/(d[best]+d2[best2]) < min_diff:
         # make plots and save them
@@ -242,8 +245,8 @@ for i in spike_range:
 
         fig2.savefig(outpath)
 
-        fig, ax = plt.subplots(ncols=2, sharey= True, figsize=[ 4, 2])
-        dist(v,templates[un[best]], n_samples, sh[best], unit=un[best], ax=ax[0])
+        fig, ax = plt.subplots(ncols=2, sharey= True, figsize=[4, 2])
+        dist(v, templates[un[best]], n_samples, sh[best], unit=un[best], ax=ax[0])
         ax[0].set_ylim(y_lim)
         compound_dist(v, templates['A'], templates['B'], n_samples, sh2[best2][0], sh2[best2][1], ax[1])
         ax[1].set_ylim(y_lim)
@@ -257,26 +260,26 @@ for i in spike_range:
             fig.show()
             # ask user
             if (200*d_diff/(d[best]+d2[best2]) <= min_diff):
-                reason= "two very close matches"
+                reason = "two very close matches"
             elif d_min >= d_accept:
-                reason= "no good match but not bad enough to reject"
+                reason = "no good match but not bad enough to reject"
             print("User feedback required: "+reason)
             choice = " "
             while choice not in ["0", "1", "2"]:
-                choice= input("Single spike (1), Compound spike (2), no spike (0)? ")
+                choice = input("Single spike (1), Compound spike (2), no spike (0)? ")
             choice = int(choice)
 
         plt.close(fig2)
         plt.close(fig)
-  
-    # apply choice 
+
+    # apply choice
     if choice == 1:
         # it's a single spike - choose the appropriate single spike unit
         peak_pos = np.argmax(templates[un[best]])
         peak_diff = peak_pos-n_samples[0]   # difference in actual peak pos compared where it should be
         spike_time = stimes[i]+np.float64((sh[best]-n_wdh+peak_diff))/fs  # spike time in seconds
         if (abs(stimes[i+1]-spike_time)*fs < max_spike_diff):
-            skip= True
+            skip = True
             # this spike was recorded within compound spike distance before
             if 'B' in str(SpikeInfo['id'][i+1+offset]):
                 # this is a spike entry that was previously created by DroSort, delete
@@ -351,16 +354,16 @@ fs = seg.analogsignals[0].sampling_rate
 spike_labels = SpikeInfo[new_column].values
 times = SpikeInfo['time'].values
 St = seg.spiketrains[0]
-seg.spiketrains[0] = neo.core.SpikeTrain(times, units='sec', t_start = St.t_start,t_stop=St.t_stop)
+seg.spiketrains[0] = neo.core.SpikeTrain(times, units='sec', t_start=St.t_start, t_stop=St.t_stop)
 seg.spiketrains[0].array_annotate(unit_labels=list(spike_labels))
-    
+
 # make spiketrains
 St = seg.spiketrains[0]
 sts = [St]
 
 for unit in units:
     times = St.times[sp.array(spike_labels) == unit]
-    st = neo.core.SpikeTrain(times, t_start = St.t_start, t_stop=St.t_stop)
+    st = neo.core.SpikeTrain(times, t_start=St.t_start, t_stop=St.t_stop)
     st.annotate(unit=unit)
     sts.append(st)
 seg.spiketrains = sts
@@ -376,22 +379,22 @@ seg.analogsignals = asigs
 
 #save all
 units = get_units(SpikeInfo, unit_column)
-logger.info("Number of spikes in trace: %d"%SpikeInfo[new_column].size)
-logger.info("Number of clusters: %d"%len(units))
+logger.info("Number of spikes in trace: %d" % SpikeInfo[new_column].size)
+logger.info("Number of clusters: %d" % len(units))
 
 # warning firing rates not saved, too high memory use.
 save_all(results_folder, SpikeInfo, Blk, logger, FinalSpikes=True, f_extension='post')
 
-do_plot = Config.getboolean('postprocessing','plot_fitted_spikes')
+do_plot = Config.getboolean('postprocessing', 'plot_fitted_spikes')
 
 if do_plot:
     logger.info("creating plots")
     outpath = plots_folder / ('overview' + fig_format)
     plot_segment(seg, units, save=outpath, colors=colors)
 
-    max_window = Config.getfloat('output','max_window_fitted_spikes_overview')
+    max_window = Config.getfloat('output', 'max_window_fitted_spikes_overview')
     plot_fitted_spikes_complete(seg, Models, SpikeInfo, new_column, max_window,
-                             plots_folder, fig_format, wsize=n_samples, extension='_templates',
-                             spike_label_interval=spike_label_interval, colors=colors)
+                                plots_folder, fig_format, wsize=n_samples,
+                                extension='_templates', spike_label_interval=spike_label_interval,
+                                colors=colors)
     logger.info("plotting done")
-
