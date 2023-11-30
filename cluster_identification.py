@@ -29,10 +29,10 @@ from functions_post_processing import *
 from sssio import *
 import sssio
 
-import matplotlib.pyplot as plt 
+import matplotlib.pyplot as plt
 
 
-#Load file
+# Load file
 
 # get config
 config_path = Path(os.path.abspath(sys.argv[1]))
@@ -42,17 +42,17 @@ Config.read(config_path)
 logger.info('config file read from %s' % config_path)
 
 mpl.rcParams['figure.dpi'] = Config.get('output','fig_dpi')
-fig_format = Config.get('output','fig_format')
+fig_format = Config.get('output', 'fig_format')
 
 # get segment to analyse
-seg_no= Config.getint('postprocessing','segment_number')
+seg_no = Config.getint('postprocessing', 'segment_number')
 
 # handling paths and creating output directory
-data_path = Path(Config.get('path','data_path'))
+data_path = Path(Config.get('path', 'data_path'))
 if not data_path.is_absolute():
     data_path = config_path.parent / data_path
 
-exp_name = Config.get('path','experiment_name')
+exp_name = Config.get('path', 'experiment_name')
 results_folder = config_path.parent / exp_name / 'results'
 plots_folder = results_folder / 'plots_post'
 
@@ -62,19 +62,19 @@ os.makedirs(plots_folder, exist_ok=True)
 sssio.get_logger(exp_name)
 
 # Load clustering data
-Blk = get_data(results_folder  / "result.dill")
+Blk = get_data(results_folder / "result.dill")
 
 SpikeInfo = pd.read_csv(results_folder / "SpikeInfo.csv")
 
 unit_column = [col for col in SpikeInfo.columns if col.startswith('unit')][-1]
 SpikeInfo = SpikeInfo.astype({unit_column: str})
-units = get_units(SpikeInfo,unit_column)
+units = get_units(SpikeInfo, unit_column)
 
-#Load Waveforms
+# Load Waveforms
 Waveforms = np.load(results_folder / "Waveforms.npy")
 fs = Blk.segments[seg_no].analogsignals[0].sampling_rate
 n_samples = np.array(Config.get('postprocessing', 'template_window').split(','), dtype='float32')/1000.0
-n_samples = np.array(n_samples * fs, dtype= int)
+n_samples = np.array(n_samples * fs, dtype=int)
 
 new_column = 'unit_labeled'
 
@@ -84,11 +84,11 @@ if new_column in SpikeInfo.keys():
     exit()
 
 if len(units) != 3:
-	print("Three units needed, %d found in SpikeInfo"%len(units))
-	exit()
+    print("Three units needed, %d found in SpikeInfo"%len(units))
+    exit()
 
 
-#Load model templates 
+# Load model templates
 template_A = np.load(os.path.join(sssort_path, "templates/template_A.npy"))
 template_B = np.load(os.path.join(sssort_path, "templates/template_B.npy"))
 
@@ -101,9 +101,9 @@ right = np.amin([len(template_A)-tmid_a, len(template_B)-tmid_b, n_samples[1]])
 
 template_A = template_A[tmid_a-left:tmid_a+right]
 template_B = template_B[tmid_b-left:tmid_b+right]
-Waveforms = Waveforms[n_samples[0]-left:n_samples[0]+right,:]
+Waveforms = Waveforms[n_samples[0]-left:n_samples[0]+right, :]
 
-logger.info("Current units: %s"%units)
+logger.info("Current units: %s" % units)
 
 distances_a = []
 distances_b = []
@@ -112,20 +112,22 @@ means = []
 mode = 'peak'
 
 logger.info("Computing best assignment")
-#Compare units to templates
+
+# Compare units to templates
 mean_waveforms = {}
 amplitude = []
+
 for unit in units:
     unit_ids = SpikeInfo.groupby(unit_column).get_group(unit)['id']
     waveforms = Waveforms[:, unit_ids]
 
-    waveforms = np.array([np.array(align_to(t,mode)) for t in waveforms.T])
+    waveforms = np.array([np.array(align_to(t, mode)) for t in waveforms.T])
 
     mean_waveforms[unit] = np.average(waveforms, axis=0)
     amplitude.append(np.max(mean_waveforms[unit])-np.min(mean_waveforms[unit]))
 
-max_ampl= np.max(amplitude)
-norm_factor= (np.max(template_A)-np.min(template_A))/max_ampl
+max_ampl = np.max(amplitude)
+norm_factor = (np.max(template_A)-np.min(template_A))/max_ampl
 
 
 for unit in units:
@@ -152,7 +154,7 @@ if len(units) > 2:
 
 asigs = {a_unit: 'A', b_unit: 'B'}
 if len(units) > 2:
-    asigs[non_unit]= '?'
+    asigs[non_unit] = '?'
 logger.info("Final assignation: %s" % asigs)
 
 # plot assignments
@@ -173,4 +175,4 @@ SpikeInfo.loc[b_unit_rows.index, new_column] = 'B'
 # store SpikeInfo
 outpath = results_folder / 'SpikeInfo_post.csv'
 logger.info("saving SpikeInfo to %s" % outpath)
-SpikeInfo.to_csv(outpath,index= False)
+SpikeInfo.to_csv(outpath, index=False)
