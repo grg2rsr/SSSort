@@ -38,12 +38,12 @@ def insert_row(df, idx, df_insert):
 
 # delete row at idx
 def delete_row(df, idx):
-    return df.iloc[:idx, ].append(df.iloc[idx+1:]).reset_index(drop = True)
+    return df.iloc[:idx, ].append(df.iloc[idx+1:]).reset_index(drop=True)
 
 
 # insert a new spike entry after row idx
 def insert_spike(SpikeInfo, new_column, idx, o_spike_time, o_spike_unit):
-    SpikeInfo = insert_row(SpikeInfo, idx, SpikeInfo.iloc[idx, ]) # insert a copy of row idx 
+    SpikeInfo = insert_row(SpikeInfo, idx, SpikeInfo.iloc[idx, ])  # insert a copy of row idx
     SpikeInfo[new_column][idx+1] = o_spike_unit
     SpikeInfo['id'][idx+1] = str(SpikeInfo['id'][idx])+'B'
     SpikeInfo['time'][idx+1] = o_spike_time
@@ -53,12 +53,12 @@ def insert_spike(SpikeInfo, new_column, idx, o_spike_time, o_spike_unit):
 
 
 """
- #       ####    ##   #####     #####    ##   #####   ##   
- #      #    #  #  #  #    #    #    #  #  #    #    #  #  
- #      #    # #    # #    #    #    # #    #   #   #    # 
- #      #    # ###### #    #    #    # ######   #   ###### 
- #      #    # #    # #    #    #    # #    #   #   #    # 
- ######  ####  #    # #####     #####  #    #   #   #    # 
+ #       ####    ##   #####     #####    ##   #####   ##
+ #      #    #  #  #  #    #    #    #  #  #    #    #  #
+ #      #    # #    # #    #    #    # #    #   #   #    #
+ #      #    # ###### #    #    #    # ######   #   ######
+ #      #    # #    # #    #    #    # #    #   #   #    #
+ ######  ####  #    # #####     #####  #    #   #   #    #
 """
 
 
@@ -79,7 +79,7 @@ if not data_path.is_absolute():
 
 exp_name = Config.get('path', 'experiment_name')
 results_folder = config_path.parent / exp_name / 'results'
-plots_folder = results_folder / 'plots_post' / 'post_process_all' 
+plots_folder = results_folder / 'plots_post' / 'post_process_all'
 
 os.makedirs(plots_folder, exist_ok=True)
 
@@ -88,7 +88,7 @@ sssio.get_logger(exp_name)
 
 # plot config
 # plotting_changes = Config.getboolean('postprocessing','plot_changes')
-mpl.rcParams['figure.dpi'] = Config.get('output','fig_dpi')
+mpl.rcParams['figure.dpi'] = Config.get('output', 'fig_dpi')
 fig_format = Config.get('output', 'fig_format')
 
 # Load clustering data
@@ -101,21 +101,21 @@ SpikeInfo = SpikeInfo.astype({unit_column: str})
 units = get_units(SpikeInfo, unit_column)
 
 """
-  #####                                                                      
- #     # #      #    #  ####  ##### ###### #####                             
- #       #      #    # #        #   #      #    #                            
- #       #      #    #  ####    #   #####  #    #                            
- #       #      #    #      #   #   #      #####                             
- #     # #      #    # #    #   #   #      #   #                             
-  #####  ######  ####   ####    #   ###### #    #                            
+  #####
+ #     # #      #    #  ####  ##### ###### #####
+ #       #      #    # #        #   #      #    #
+ #       #      #    #  ####    #   #####  #    #
+ #       #      #    #      #   #   #      #####
+ #     # #      #    # #    #   #   #      #   #
+  #####  ######  ####   ####    #   ###### #    #
                                                                              
                                                                              
- # #####  ###### #    # ##### # ###### #  ####    ##   ##### #  ####  #    # 
- # #    # #      ##   #   #   # #      # #    #  #  #    #   # #    # ##   # 
- # #    # #####  # #  #   #   # #####  # #      #    #   #   # #    # # #  # 
- # #    # #      #  # #   #   # #      # #      ######   #   # #    # #  # # 
- # #    # #      #   ##   #   # #      # #    # #    #   #   # #    # #   ## 
- # #####  ###### #    #   #   # #      #  ####  #    #   #   #  ####  #    #                                                                 
+ # #####  ###### #    # ##### # ###### #  ####    ##   ##### #  ####  #    #
+ # #    # #      ##   #   #   # #      # #    #  #  #    #   # #    # ##   #
+ # #    # #####  # #  #   #   # #####  # #      #    #   #   # #    # # #  #
+ # #    # #      #  # #   #   # #      # #      ######   #   # #    # #  # #
+ # #    # #      #   ##   #   # #      # #    # #    #   #   # #    # #   ##
+ # #####  ###### #    #   #   # #      #  ####  #    #   #   #  ####  #    #
                                                                            
 """
 
@@ -124,8 +124,8 @@ logger.info("Identifying clusters in SpikeInfo.csv")
 # Load Waveforms
 Waveforms = np.load(results_folder / "Waveforms.npy")
 fs = Blk.segments[seg_no].analogsignals[0].sampling_rate
-n_samples = np.array(Config.get('postprocessing', 'template_window').split(',')
-                     , dtype='float32')/1000.0
+n_samples = np.array(Config.get('postprocessing', 'template_window').split(','),
+                     dtype='float32')/1000.0
 n_samples = np.array(n_samples * fs, dtype=int)
 
 new_column = 'unit_labeled'
@@ -237,13 +237,13 @@ if 'unit_labeled' not in SpikeInfo.columns:
     logger.info("There was an error identifying clusters")
     exit()
 
-"""                                                                                                   
- #####   ####   ####  #####       #####  #####   ####   ####  ######  ####   ####  # #    #  ####  
- #    # #    # #        #         #    # #    # #    # #    # #      #      #      # ##   # #    # 
- #    # #    #  ####    #   ##### #    # #    # #    # #      #####   ####   ####  # # #  # #      
- #####  #    #      #   #         #####  #####  #    # #      #           #      # # #  # # #  ### 
- #      #    # #    #   #         #      #   #  #    # #    # #      #    # #    # # #   ## #    # 
- #       ####   ####    #         #      #    #  ####   ####  ######  ####   ####  # #    #  ####  
+"""
+ #####   ####   ####  #####       #####  #####   ####   ####  ######  ####   ####  # #    #  ####
+ #    # #    # #        #         #    # #    # #    # #    # #      #      #      # ##   # #    #
+ #    # #    #  ####    #   ##### #    # #    # #    # #      #####   ####   ####  # # #  # #
+ #####  #    #      #   #         #####  #####  #    # #      #           #      # # #  # # #  ###
+ #      #    # #    #   #         #      #   #  #    # #    # #      #    # #    # # #   ## #    #
+ #       ####   ####    #         #      #    #  ####   ####  ######  ####   ####  # #    #  ####
 """
 
 unit_column = 'unit_labeled'
@@ -255,7 +255,7 @@ seg = Blk.segments[seg_no]
 fs = np.float64(seg.analogsignals[0].sampling_rate)
 ifs = int(fs/1000)   # sampling rate in kHz as integer value to convert ms to bins NOTE: assumes sampling rate divisible by 1000
 
-### Train models
+# Train models
 
 # recalculate the latest firing rates according to spike assignments in unit_column
 # kernel_slow = Config.getfloat('kernels','sigma_slow')
@@ -272,7 +272,7 @@ n_model_comp = Config.getint('spike model', 'n_model_comp')
 
 spike_model_type = Config.get('postprocessing', 'spike_model_type')
 
-spike_model = Spike_Model if spike_model_type == "individual" else Spike_Model_Nlin 
+spike_model = Spike_Model if spike_model_type == "individual" else Spike_Model_Nlin
 Models = train_Models(SpikeInfo, unit_column, Waveforms, n_comp=n_model_comp, model_type=spike_model)
 
 unit_ids = SpikeInfo[unit_column]
@@ -282,11 +282,10 @@ for unit in units:
     frate[unit] = SpikeInfo['frate_'+unit]
 
 ##########################################################################################
-
 sz_wd = Config.getfloat('postprocessing', 'spike_window_width')
 align_mode = Config.get('postprocessing', 'vertical_align_mode')
 same_spike_tolerance = Config.getfloat('postprocessing', 'spike_position_tolerance')
-same_spike_tolerance = int(same_spike_tolerance*ifs) # in time steps
+same_spike_tolerance = int(same_spike_tolerance*ifs)  # in time steps
 d_accept = Config.getfloat('postprocessing', 'max_dist_for_auto_accept')
 d_reject = Config.getfloat('postprocessing', 'min_dist_for_auto_reject')
 min_diff = Config.getfloat('postprocessing', 'min_diff_for_auto_accept')
@@ -302,6 +301,7 @@ try:
 except:
     logger.info("spike index range not valid, reverting to processing all")
     spike_range = range(1, len(unit_ids)-1)
+
 spike_label_interval = Config.getint('output', 'spike_label_interval')
 
 asig = seg.analogsignals[0]
@@ -313,19 +313,19 @@ n_wd = int(sz_wd*ifs)
 n_wdh = n_wd//2
 
 """
-##     ##      ###     ##   ##    ##    ##        #######    #######   ########   
-###   ###     ## ##    ##   ###   ##    ##       ##     ##  ##     ##  ##     ## 
-#### ####    ##   ##   ##   ####  ##    ##       ##     ##  ##     ##  ##     ## 
-## ### ##   ##     ##  ##   ## ## ##    ##       ##     ##  ##     ##  ########  
-##     ##   #########  ##   ##  ####    ##       ##     ##  ##     ##  ##    
-##     ##   ##     ##  ##   ##   ###    ##       ##     ##  ##     ##  ##    
-##     ##   ##     ##  ##   ##    ##    ########  #######    #######   ##    
+##     ##      ###     ##   ##    ##    ##        #######    #######   ########
+###   ###     ## ##    ##   ###   ##    ##       ##     ##  ##     ##  ##     ##
+#### ####    ##   ##   ##   ####  ##    ##       ##     ##  ##     ##  ##     ##
+## ### ##   ##     ##  ##   ## ## ##    ##       ##     ##  ##     ##  ########
+##     ##   #########  ##   ##  ####    ##       ##     ##  ##     ##  ##
+##     ##   ##     ##  ##   ##   ###    ##       ##     ##  ##     ##  ##
+##     ##   ##     ##  ##   ##    ##    ########  #######    #######   ##
 """
 
 new_column = 'unit_final'
 if new_column not in SpikeInfo.keys():
     SpikeInfo[new_column] = SpikeInfo['unit_labeled']
-offset = 0   # will keep track of shifts due to inserted and deleted spikes 
+offset = 0   # will keep track of shifts due to inserted and deleted spikes
 # don't consider first and last spike to avoid corner cases; these do not matter in practice anyway
 # tracemalloc.start()
 skip = False
@@ -358,7 +358,10 @@ for i in spike_range:
     for pos1 in range(n_wd):
         for pos2 in range(n_wd):
             # one of the spikes must be close to the spike time under consideration
-            if ((abs(pos1-n_wdh) <= same_spike_tolerance) or (abs(pos2-n_wdh) <= same_spike_tolerance)) and (abs(pos1-pos2) < max_spike_diff):
+            if (((abs(pos1-n_wdh) <= same_spike_tolerance)
+                 or (abs(pos2-n_wdh) <= same_spike_tolerance))
+               and (abs(pos1-pos2) < max_spike_diff)):
+
                 d2.append(compound_dist(v, templates['A'], templates['B'], n_samples, pos1, pos2))
                 sh2.append((pos1, pos2))
 
@@ -369,7 +372,8 @@ for i in spike_range:
     choice = 1 if d[best] <= d2[best2] else 2
     d_diff = abs(d[best]-d2[best2])
 
-    logger.info("Spike {}: Single spike d={}, compound spike d={}, difference={}".format(SpikeInfo['id'][i+offset], ('%.4f' % d[best]), ('%.4f' % d2[best2]), ('%.4f' % d_diff)))
+    logger.info("Spike {}: Single spike d={}, compound spike d={}, difference={}".format(SpikeInfo['id'][i+offset],
+                ('%.4f' % d[best]), ('%.4f' % d2[best2]), ('%.4f' % d_diff)))
 
     # plot params
     zoom = (float(stimes[i])-sz_wd/1000*20, float(stimes[i])+sz_wd/1000*20)
@@ -377,13 +381,17 @@ for i in spike_range:
 
     if d_min >= d_accept or 200*d_diff/(d[best]+d2[best2]) < min_diff:
         # make plots and save them
-        fig2, ax2 = plot_fitted_spikes_pp(seg, Models, SpikeInfo, new_column, zoom=zoom, box=(float(stimes[i]),sz_wd/1000), wsize=n_samples, spike_label_interval=spike_label_interval, colors=colors)
+        fig2, ax2 = plot_fitted_spikes_pp(seg, Models, SpikeInfo, new_column,
+                                          zoom=zoom, box=(float(stimes[i]), sz_wd/1000),
+                                          wsize=n_samples,
+                                          spike_label_interval=spike_label_interval, colors=colors)
+
         outpath = plots_folder / (str(SpikeInfo['id'][i+offset]) + '_context_plot' + fig_format)
         ax2[1].plot(stimes[i], 1, '.', color='y')
 
         fig2.savefig(outpath)
 
-        fig, ax = plt.subplots(ncols=2, sharey= True, figsize=[4, 2])
+        fig, ax = plt.subplots(ncols=2, sharey=True, figsize=[4, 2])
         dist(v, templates[un[best]], n_samples, sh[best], unit=un[best], ax=ax[0])
         ax[0].set_ylim(y_lim)
         compound_dist(v, templates['A'], templates['B'], n_samples, sh2[best2][0], sh2[best2][1], ax[1])
@@ -421,21 +429,34 @@ for i in spike_range:
             # this spike was recorded within compound spike distance before
             if 'B' in str(SpikeInfo['id'][i+1+offset]):
                 # this is a spike entry that was previously created by DroSort, delete
-                logger.info("Spike {}: time= {}: Single spike, was type {} now of type {}, time {}. Conflicting spike {}; deleted {}".format(SpikeInfo['id'][i+offset],('%.4f' % stimes[i]),SpikeInfo[unit_column][i+offset],un[best],('%.4f' % spike_time),SpikeInfo['id'][i+1+offset],SpikeInfo['id'][i+1+offset]))
+                logger.info("Spike {}: time= {}: Single spike, was type {} now of type {},"
+                            "time {}. Conflicting spike {}; deleted {}"
+                            .format(SpikeInfo['id'][i+offset],
+                                    ('%.4f' % stimes[i]), SpikeInfo[unit_column][i+offset],
+                                    un[best], ('%.4f' % spike_time), SpikeInfo['id'][i+1+offset],
+                                    SpikeInfo['id'][i+1+offset]))
+
                 SpikeInfo = delete_row(SpikeInfo, i+1+offset)
                 offset -= 1
             else:
                 # this is a detected spike, keep for further reference
-                logger.info("Spike {}: time= {}: Single spike, was type {} now of type {}, time {}. Conflicting spike {}; marked {} for deletion (-2)".format(SpikeInfo['id'][i+offset],('%.4f' % stimes[i]),SpikeInfo[unit_column][i+offset],un[best],('%.4f' % spike_time),SpikeInfo['id'][i+1+offset],SpikeInfo['id'][i+1+offset]))
-                SpikeInfo[new_column][i+offset]= '-2'
-                SpikeInfo['good'][i+offset]= False
-                SpikeInfo['frate_fast'][i+offset]= SpikeInfo['frate_'+un[best]][i+offset]
+                logger.info("Spike {}: time= {}: Single spike, was type {} now of type {},"
+                            " time {}. Conflicting spike {}; marked {} for deletion (-2)"
+                            .format(SpikeInfo['id'][i+offset], 
+                                    ('%.4f' % stimes[i]), SpikeInfo[unit_column][i+offset],
+                                    un[best], ('%.4f' % spike_time), SpikeInfo['id'][i+1+offset],
+                                    SpikeInfo['id'][i+1+offset]))
+
+                SpikeInfo[new_column][i+offset] = '-2'
+                SpikeInfo['good'][i+offset] = False
+                SpikeInfo['frate_fast'][i+offset] = SpikeInfo['frate_'+un[best]][i+offset]
         else:
             # spike isn't duplicated, normal assignment of a single spike
-            logger.info("Spike {}: time= {}: Single spike, was type {}, now  of type {}, time= {}".format(SpikeInfo['id'][i+offset],('%.4f' % stimes[i]),SpikeInfo[unit_column][i+offset],un[best],('%.4f' % spike_time)))
+            logger.info("Spike {}: time= {}: Single spike, was type {}, now  of type {}, time= {}".format(SpikeInfo['id'][i+offset], ('%.4f' % stimes[i]), SpikeInfo[unit_column][i+offset], un[best], ('%.4f' % spike_time)))
             SpikeInfo[new_column][i+offset] = un[best]
             SpikeInfo['time'][i+offset] = spike_time
             SpikeInfo['frate_fast'][i+offset] = SpikeInfo['frate_'+un[best]][i+offset]
+
     elif choice == 2:
         # it's a compound spike - choose the appropriate spike unit and handle second spike
         orig_spike = np.argmin(abs(np.array(sh2[best2])-n_wdh))
@@ -444,7 +465,7 @@ for i in spike_range:
         peak_pos = np.argmax(templates[spike_unit])
         peak_diff = peak_pos-n_samples[0]   # difference in actual peak pos compared where it should be
         spike_time = stimes[i]+np.float64(sh2[best2][orig_spike]-n_wdh+peak_diff)/fs  # spike time in seconds
-        logger.info("Spike {}: time= {}: Compound spike, first spike of type {}, time= {}".format(SpikeInfo['id'][i+offset],('%.4f' % SpikeInfo['time'][i+offset]),spike_unit,('%.4f' % spike_time)))
+        logger.info("Spike {}: time= {}: Compound spike, first spike of type {}, time= {}".format(SpikeInfo['id'][i+offset], ('%.4f' % SpikeInfo['time'][i+offset]), spike_unit, ('%.4f' % spike_time)))
         SpikeInfo[new_column][i+offset] = spike_unit
         SpikeInfo['time'][i+offset] = spike_time
         SpikeInfo['good'][i+offset] = False   # do not use compound spikes for Model building
@@ -453,37 +474,44 @@ for i in spike_range:
         o_spike_unit = 'A' if other_spike == 0 else 'B'
         peak_pos = np.argmax(templates[o_spike_unit])
         peak_diff = peak_pos-n_samples[0]   # difference in actual peak pos compared where it should be
-        o_spike_time = stimes[i]+float(sh2[best2][other_spike]-n_wdh+peak_diff)/fs  # spike time in seconds
+        o_spike_time = stimes[i]+float(sh2[best2][other_spike]-n_wdh+peak_diff) / fs  # spike time in seconds
         found = False
         for j in [i-1, i+1]:
             if abs(stimes[j]-o_spike_time)*fs < same_spike_tolerance:
                 # the other spike coincides with the previous spike in the original list
                 # make sure that the previous decision is consistent with the current one
-                logger.info("Spike {}: time= {}: Compound spike, second spike was known as {}, now of type {}, time= {}".format(SpikeInfo['id'][i+offset],('%.4f' % SpikeInfo['time'][i+offset]),SpikeInfo[unit_column][o_spike_id+offset],o_spike_unit,('%.4f' % o_spike_time)))
+                logger.info("Spike {}: time= {}: Compound spike, second spike was known as {}, now of type {}, time= {}"
+                            .format(SpikeInfo['id'][i+offset],
+                                    ('%.4f' % SpikeInfo['time'][i+offset]),
+                                    SpikeInfo[unit_column][o_spike_id+offset],
+                                    o_spike_unit, ('%.4f' % o_spike_time)
+                                    )
+                            )
+
                 SpikeInfo[new_column][o_spike_id+offset] = o_spike_unit
                 SpikeInfo['good'][o_spike_id+offset] = False   # do not use compound spikes for Model building
-                SpikeInfo['frate_fast'][o_spike_id+offset] = SpikeInfo['frate_'+o_spike_unit][o_spike_id+offset]
+                SpikeInfo['frate_fast'][o_spike_id+offset] = SpikeInfo['frate_' + o_spike_unit][o_spike_id+offset]
                 found = True
                 if j == i+1:
                     skip = True
                 break
         if not found:
             # the other spike does not yet exist in the list: insert new row
-            logger.info("Spike {}: Compound spike, second spike was undetected, inserted new spike of type {}, time= {}".format(SpikeInfo['id'][i+offset],o_spike_unit,o_spike_time))
+            logger.info("Spike {}: Compound spike, second spike was undetected, inserted new spike of type {}, time= {}".format(SpikeInfo['id'][i+offset], o_spike_unit, o_spike_time))
             SpikeInfo = insert_spike(SpikeInfo, new_column, i+offset, o_spike_time, o_spike_unit)
             offset += 1
-        
+
     else:
         # it's a non-spike - delete it or mark for deletion
         if 'B' in str(SpikeInfo['id'][i+offset]):   # this is a spike entry that was previously created by DroSort, delete
-            SpikeInfo= delete_row(SpikeInfo, i+offset)
+            SpikeInfo = delete_row(SpikeInfo, i+offset)
             logger.info("Spike {}: Not a spike, inserted by DroSort previously, row removed".format(SpikeInfo['id'][i+offset]))
             offset -= 1
         else:   # this is a detected spike, keep for further reference
             SpikeInfo[new_column][i+offset] = '-2'
             SpikeInfo['good'][i+offset] = False   # definitively do not use for model building
             logger.info("Spike {}: Not a spike, marked for deletion (-2)".format(SpikeInfo['id'][i+offset]))
-            
+
 calc_update_final_frates(SpikeInfo, unit_column, kernel_fast)
 
 # Saving
@@ -515,7 +543,7 @@ for unit in units:
     asigs.append(frate)
 seg.analogsignals = asigs
 
-#save all
+# save all
 units = get_units(SpikeInfo, unit_column)
 logger.info("Number of spikes in trace: %d" % SpikeInfo[new_column].size)
 logger.info("Number of clusters: %d" % len(units))
