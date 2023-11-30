@@ -51,15 +51,14 @@ def insert_spike(SpikeInfo, new_column, idx, o_spike_time, o_spike_unit):
     SpikeInfo['frate_fast'][idx+1] = SpikeInfo['frate_'+o_spike_unit][idx+1]   # update rate_fast to the correct rate for the nwe spike's identity
     return SpikeInfo
 
-    
+
 """
-##       ######      ###     ########      ######  ##      ##     ##   ######  ######## ######## ########  
-##      ##    ##    ## ##    ##     ##    ##    ## ##      ##     ##  ##    ##    ##    ##       ##     ## 
-##      ##    ##   ##   ##   ##     ##    ##       ##      ##     ##  ##          ##    ##       ##     ## 
-##      ##    ##  ##     ##  ##     ##    ##       ##      ##     ##   ######     ##    ######   ########  
-##      ##    ##  #########  ##     ##    ##       ##      ##     ##        ##    ##    ##       ##   ##   
-##      ##    ##  ##     ##  ##     ##    ##    ## ##      ##     ##  ##    ##    ##    ##       ##    ## 
-#######  ######   ##     ##  ########      ######  #######  #######    ######     ##    ######## ##     ##  
+ #       ####    ##   #####     #####    ##   #####   ##   
+ #      #    #  #  #  #    #    #    #  #  #    #    #  #  
+ #      #    # #    # #    #    #    # #    #   #   #    # 
+ #      #    # ###### #    #    #    # ######   #   ###### 
+ #      #    # #    # #    #    #    # #    #   #   #    # 
+ ######  ####  #    # #####     #####  #    #   #   #    # 
 """
 
 
@@ -92,23 +91,160 @@ sssio.get_logger(exp_name)
 mpl.rcParams['figure.dpi'] = Config.get('output','fig_dpi')
 fig_format = Config.get('output', 'fig_format')
 
-
-# Load necessary data
-
-# Load block
+# Load clustering data
 Blk = get_data(results_folder / "result.dill")
 
-# Load SpikeInfo
-error_msg = "It appears that you have not yet labeled the spike clusters. Run cluster_identification.py first"
-try:
-    SpikeInfo = pd.read_csv(results_folder / "SpikeInfo_post.csv")
-except:
-    logger.info(error_msg)
+SpikeInfo = pd.read_csv(results_folder / "SpikeInfo.csv")
+
+unit_column = [col for col in SpikeInfo.columns if col.startswith('unit')][-1]
+SpikeInfo = SpikeInfo.astype({unit_column: str})
+units = get_units(SpikeInfo, unit_column)
+
+"""
+  #####                                                                      
+ #     # #      #    #  ####  ##### ###### #####                             
+ #       #      #    # #        #   #      #    #                            
+ #       #      #    #  ####    #   #####  #    #                            
+ #       #      #    #      #   #   #      #####                             
+ #     # #      #    # #    #   #   #      #   #                             
+  #####  ######  ####   ####    #   ###### #    #                            
+                                                                             
+                                                                             
+ # #####  ###### #    # ##### # ###### #  ####    ##   ##### #  ####  #    # 
+ # #    # #      ##   #   #   # #      # #    #  #  #    #   # #    # ##   # 
+ # #    # #####  # #  #   #   # #####  # #      #    #   #   # #    # # #  # 
+ # #    # #      #  # #   #   # #      # #      ######   #   # #    # #  # # 
+ # #    # #      #   ##   #   # #      # #    # #    #   #   # #    # #   ## 
+ # #####  ###### #    #   #   # #      #  ####  #    #   #   #  ####  #    #                                                                 
+                                                                           
+"""
+
+logger.info("Identifying clusters in SpikeInfo.csv")
+
+# Load Waveforms
+Waveforms = np.load(results_folder / "Waveforms.npy")
+fs = Blk.segments[seg_no].analogsignals[0].sampling_rate
+n_samples = np.array(Config.get('postprocessing', 'template_window').split(',')
+                     , dtype='float32')/1000.0
+n_samples = np.array(n_samples * fs, dtype=int)
+
+new_column = 'unit_labeled'
+
+if new_column in SpikeInfo.keys():
+    logger.info("Updating exiting column")
+    logger.info(SpikeInfo[unit_column].value_counts())
+
+if len(units) != 3:
+    logger.info("Three units needed, %d found in SpikeInfo" % len(units))
     exit()
 
+# Load model templates
+template_A = np.load(os.path.join(sssort_path, "templates/template_A.npy"))
+template_B = np.load(os.path.join(sssort_path, "templates/template_B.npy"))
+
+# Adapt templates to negative detection.
+if Config.get('spike detect', 'peak_mode') == 'negative':
+    org_v_base = (np.min(template_A), np.min(template_B))
+    template_A *= -1
+    template_B *= -1
+
+    # align back to negative values
+    # (fix: outcome from sssort is negative ¿?¿)
+    template_A -= abs(np.min(template_A)-org_v_base[0])
+    template_B -= abs(np.min(template_B)-org_v_base[1])
+
+# templates and waveforms need to be put on comparable shape and size
+template_A, template_B, Waveforms = resize_waveforms(template_A, template_B, Waveforms, n_samples)
+
+logger.info("Current units: %s" % units)
+
+distances_a = []
+distances_b = []
+
+mode = 'peak'
+
+logger.info("Computing best assignment")
+
+# Average waveforms
+mean_waveforms = get_aligned_wmean_by_unit(Waveforms, SpikeInfo, units,
+                                           unit_column, mode)
+
+# normalize waveforms
+# get maximum amplitude for norm_factor
+max_ampl = np.max([np.max(mean_wave)-np.min(mean_wave)
+                   for unit, mean_wave in mean_waveforms.items()])
+
+norm_factor = (np.max(template_A)-np.min(template_A))/max_ampl
+normalized_means = [mean_wave*norm_factor for unit, mean_wave
+                    in mean_waveforms.items()]
+
+# Compare waveform units to templates
+distances_a = [np.linalg.norm(mean-template_A) for mean in normalized_means]
+distances_b = [np.linalg.norm(mean-template_B) for mean in normalized_means]
+
+logger.info("Distances to a: ")
+logger.info("\t\t%s" % str(units))
+logger.info("\t\t%s" % str(distances_a))
+logger.info("Distances to b: ")
+logger.info("\t\t%s" % str(units))
+logger.info("\t\t%s" % str(distances_b))
+
+# Get best assignments
+a_unit = units[np.argmin(distances_a)]
+b_unit = units[np.argmin(distances_b)]
+if len(units) > 2:
+    non_unit = [unit for unit in units if a_unit not in unit and b_unit not in unit][0]
+
+asigs = {a_unit: 'A', b_unit: 'B'}
+if len(units) > 2:
+    asigs[non_unit] = '?'
+
+
+# plot assignments
+outpath = plots_folder / ("cluster_reassignments" + fig_format)
+plot_means(normalized_means, units, template_A, template_B, asigs=asigs, outpath=outpath)
+
+# create new column with reassigned labels
+SpikeInfo[new_column] = copy.deepcopy(SpikeInfo[unit_column].values)
+if len(units) > 2:
+    non_unit_rows = SpikeInfo.groupby(new_column).get_group(non_unit)
+    SpikeInfo.loc[non_unit_rows.index, new_column] = '-2'
+
+# Relabel column to A/B
+a_unit_rows = SpikeInfo.groupby(new_column).get_group(a_unit)
+SpikeInfo.loc[a_unit_rows.index, new_column] = 'A'
+b_unit_rows = SpikeInfo.groupby(new_column).get_group(b_unit)
+SpikeInfo.loc[b_unit_rows.index, new_column] = 'B'
+
+
+logger.info("Clusters identification finished")
+logger.info("Final assignation: %s" % asigs)
+
+# # Load necessary data
+
+# # Load block
+# Blk = get_data(results_folder / "result.dill")
+
+# # Load SpikeInfo
+# error_msg = "It appears that you have not yet labeled the spike clusters. Run cluster_identification.py first"
+# try:
+#     SpikeInfo = pd.read_csv(results_folder / "SpikeInfo_post.csv")
+# except:
+    # logger.info(error_msg)
+    # exit()
+
 if 'unit_labeled' not in SpikeInfo.columns:
-    logger.info(error_msg)
+    logger.info("There was an error identifying clusters")
     exit()
+
+"""                                                                                                   
+ #####   ####   ####  #####       #####  #####   ####   ####  ######  ####   ####  # #    #  ####  
+ #    # #    # #        #         #    # #    # #    # #    # #      #      #      # ##   # #    # 
+ #    # #    #  ####    #   ##### #    # #    # #    # #      #####   ####   ####  # # #  # #      
+ #####  #    #      #   #         #####  #####  #    # #      #           #      # # #  # # #  ### 
+ #      #    # #    #   #         #      #   #  #    # #    # #      #    # #    # # #   ## #    # 
+ #       ####   ####    #         #      #    #  ####   ####  ######  ####   ####  # #    #  ####  
+"""
 
 unit_column = 'unit_labeled'
 SpikeInfo = SpikeInfo.astype({'id': str, unit_column: str})
@@ -126,9 +262,11 @@ ifs = int(fs/1000)   # sampling rate in kHz as integer value to convert ms to bi
 kernel_fast = Config.getfloat('kernels', 'sigma_fast')
 calc_update_final_frates(SpikeInfo, unit_column, kernel_fast)
 
-waveforms_path = config_path.parent / results_folder / "Waveforms.npy"
-Waveforms = np.load(waveforms_path)
-logger.info('templates read from %s' % waveforms_path)
+# TODO: double check that resized Waveforms are ok
+# waveforms_path = config_path.parent / results_folder / "Waveforms.npy"
+# Waveforms = np.load(waveforms_path)
+# logger.info('templates read from %s' % waveforms_path)
+
 n_model_comp = Config.getint('spike model', 'n_model_comp')
 
 
