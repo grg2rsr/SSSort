@@ -262,10 +262,10 @@ ifs = int(fs/1000)   # sampling rate in kHz as integer value to convert ms to bi
 kernel_fast = Config.getfloat('kernels', 'sigma_fast')
 calc_update_final_frates(SpikeInfo, unit_column, kernel_fast)
 
-# TODO: double check that resized Waveforms are ok
-# waveforms_path = config_path.parent / results_folder / "Waveforms.npy"
-# Waveforms = np.load(waveforms_path)
-# logger.info('templates read from %s' % waveforms_path)
+# TODO: try to reuse resized waveforms from cluster identification
+waveforms_path = config_path.parent / results_folder / "Waveforms.npy"
+Waveforms = np.load(waveforms_path)
+logger.info('templates read from %s' % waveforms_path)
 
 n_model_comp = Config.getint('spike model', 'n_model_comp')
 
@@ -346,9 +346,11 @@ for i in spike_range:
     sh = []
     un = []
     templates = {}
+
     for unit in units[:2]:
         templates[unit] = make_single_template(Models[unit], frate[unit][i])
         templates[unit] = align_to(templates[unit], align_mode)
+
         for pos in range(n_wdh-same_spike_tolerance, n_wdh + same_spike_tolerance):
             d.append(dist(v, templates[unit], n_samples, pos))
             sh.append(pos)
