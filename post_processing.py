@@ -48,7 +48,8 @@ def insert_spike(SpikeInfo, new_column, idx, o_spike_time, o_spike_unit):
     SpikeInfo['id'][idx+1] = str(SpikeInfo['id'][idx])+'B'
     SpikeInfo['time'][idx+1] = o_spike_time
     SpikeInfo['good'][idx+1] = False   # do not use for building templates!
-    SpikeInfo['frate_fast'][idx+1] = SpikeInfo['frate_'+o_spike_unit][idx+1]   # update rate_fast to the correct rate for the nwe spike's identity
+    # update rate_fast to the correct rate for the nwe spike's identity
+    SpikeInfo['frate_fast'][idx+1] = SpikeInfo['frate_'+o_spike_unit][idx+1]  
     return SpikeInfo
 
 
@@ -326,6 +327,7 @@ new_column = 'unit_final'
 if new_column not in SpikeInfo.keys():
     SpikeInfo[new_column] = SpikeInfo['unit_labeled']
 offset = 0   # will keep track of shifts due to inserted and deleted spikes
+
 # don't consider first and last spike to avoid corner cases; these do not matter in practice anyway
 # tracemalloc.start()
 skip = False
@@ -336,8 +338,13 @@ for i in spike_range:
     start = int((float(stimes[i])*1000-sz_wd/2)*ifs)
     stop = start+n_wd
 
-    if not ((start > 0) and (stop < len(asig))):   # only do something if the spike is not too close to the start or end of the recording, otherwise ignore
+    # only do something if the spike is not too close to
+    # the start or end of the recording, otherwise ignore
+    if not ((start > 0) and (stop < len(asig))):   
         continue
+
+    spike_id = SpikeInfo['id'][i + offset]
+    spike_label = SpikeInfo[unit_column][i+offset]
 
     # spikes are not borders:
     v = np.array(asig[start:stop], dtype=float)
@@ -374,7 +381,7 @@ for i in spike_range:
     choice = 1 if d[best] <= d2[best2] else 2
     d_diff = abs(d[best]-d2[best2])
 
-    logger.info("Spike {}: Single spike d={}, compound spike d={}, difference={}".format(SpikeInfo['id'][i+offset],
+    logger.info("Spike {}: Single spike d={}, compound spike d={}, difference={}".format(spike_id,
                 ('%.4f' % d[best]), ('%.4f' % d2[best2]), ('%.4f' % d_diff)))
 
     # plot params
@@ -388,7 +395,7 @@ for i in spike_range:
                                           wsize=n_samples,
                                           spike_label_interval=spike_label_interval, colors=colors)
 
-        outpath = plots_folder / (str(SpikeInfo['id'][i+offset]) + '_context_plot' + fig_format)
+        outpath = plots_folder / (str(spike_id) + '_context_plot' + fig_format)
         ax2[1].plot(stimes[i], 1, '.', color='y')
 
         fig2.savefig(outpath)
@@ -398,7 +405,7 @@ for i in spike_range:
         ax[0].set_ylim(y_lim)
         compound_dist(v, templates['A'], templates['B'], n_samples, sh2[best2][0], sh2[best2][1], ax[1])
         ax[1].set_ylim(y_lim)
-        outpath = plots_folder / (str(SpikeInfo['id'][i+offset]) + '_template_matches' + fig_format)
+        outpath = plots_folder / (str(spike_id) + '_template_matches' + fig_format)
         fig.savefig(outpath)
         if d_min > d_reject:
             choice = 0
@@ -433,8 +440,7 @@ for i in spike_range:
                 # this is a spike entry that was previously created by DroSort, delete
                 logger.info("Spike {}: time= {}: Single spike, was type {} now of type {},"
                             "time {}. Conflicting spike {}; deleted {}"
-                            .format(SpikeInfo['id'][i+offset],
-                                    ('%.4f' % stimes[i]), SpikeInfo[unit_column][i+offset],
+                            .format(spike_id, ('%.4f' % stimes[i]), spike_label,
                                     un[best], ('%.4f' % spike_time), SpikeInfo['id'][i+1+offset],
                                     SpikeInfo['id'][i+1+offset]))
 
@@ -442,10 +448,10 @@ for i in spike_range:
                 offset -= 1
             else:
                 # this is a detected spike, keep for further reference
-                logger.info("Spike {}: time= {}: Single spike, was type {} now of type {},"
+                logger.info("Spike {}: time= {}: Single spike, was type {}, now of type {},"
                             " time {}. Conflicting spike {}; marked {} for deletion (-2)"
-                            .format(SpikeInfo['id'][i+offset], 
-                                    ('%.4f' % stimes[i]), SpikeInfo[unit_column][i+offset],
+                            .format(spike_id, 
+                                    ('%.4f' % stimes[i]), spike_label,
                                     un[best], ('%.4f' % spike_time), SpikeInfo['id'][i+1+offset],
                                     SpikeInfo['id'][i+1+offset]))
 
@@ -454,7 +460,11 @@ for i in spike_range:
                 SpikeInfo['frate_fast'][i+offset] = SpikeInfo['frate_'+un[best]][i+offset]
         else:
             # spike isn't duplicated, normal assignment of a single spike
-            logger.info("Spike {}: time= {}: Single spike, was type {}, now  of type {}, time= {}".format(SpikeInfo['id'][i+offset], ('%.4f' % stimes[i]), SpikeInfo[unit_column][i+offset], un[best], ('%.4f' % spike_time)))
+            logger.info("Spike {}: time= {}: Single spike, was type {}, now of type {}, time= {}"
+                        .format(spike_id, ('%.4f' % stimes[i]),
+                                spike_label,
+                                un[best], ('%.4f' % spike_time)))
+
             SpikeInfo[new_column][i+offset] = un[best]
             SpikeInfo['time'][i+offset] = spike_time
             SpikeInfo['frate_fast'][i+offset] = SpikeInfo['frate_'+un[best]][i+offset]
@@ -467,7 +477,10 @@ for i in spike_range:
         peak_pos = np.argmax(templates[spike_unit])
         peak_diff = peak_pos-n_samples[0]   # difference in actual peak pos compared where it should be
         spike_time = stimes[i]+np.float64(sh2[best2][orig_spike]-n_wdh+peak_diff)/fs  # spike time in seconds
-        logger.info("Spike {}: time= {}: Compound spike, first spike of type {}, time= {}".format(SpikeInfo['id'][i+offset], ('%.4f' % SpikeInfo['time'][i+offset]), spike_unit, ('%.4f' % spike_time)))
+
+        logger.info("Spike {}: time= {}: Compound spike, first spike of type {}, time= {}"
+                    .format(spike_id, ('%.4f' % SpikeInfo['time'][i+offset]), spike_unit, ('%.4f' % spike_time)))
+
         SpikeInfo[new_column][i+offset] = spike_unit
         SpikeInfo['time'][i+offset] = spike_time
         SpikeInfo['good'][i+offset] = False   # do not use compound spikes for Model building
@@ -483,8 +496,7 @@ for i in spike_range:
                 # the other spike coincides with the previous spike in the original list
                 # make sure that the previous decision is consistent with the current one
                 logger.info("Spike {}: time= {}: Compound spike, second spike was known as {}, now of type {}, time= {}"
-                            .format(SpikeInfo['id'][i+offset],
-                                    ('%.4f' % SpikeInfo['time'][i+offset]),
+                            .format(spike_id, ('%.4f' % SpikeInfo['time'][i+offset]),
                                     SpikeInfo[unit_column][o_spike_id+offset],
                                     o_spike_unit, ('%.4f' % o_spike_time)
                                     )
@@ -499,20 +511,22 @@ for i in spike_range:
                 break
         if not found:
             # the other spike does not yet exist in the list: insert new row
-            logger.info("Spike {}: Compound spike, second spike was undetected, inserted new spike of type {}, time= {}".format(SpikeInfo['id'][i+offset], o_spike_unit, o_spike_time))
+            logger.info("Spike {}: Compound spike, second spike was undetected, inserted new spike of type {}, time= {}"
+                        .format(spike_id, o_spike_unit, o_spike_time))
+
             SpikeInfo = insert_spike(SpikeInfo, new_column, i+offset, o_spike_time, o_spike_unit)
             offset += 1
 
     else:
         # it's a non-spike - delete it or mark for deletion
-        if 'B' in str(SpikeInfo['id'][i+offset]):   # this is a spike entry that was previously created by DroSort, delete
+        if 'B' in str(spike_id):   # this is a spike entry that was previously created by DroSort, delete
             SpikeInfo = delete_row(SpikeInfo, i+offset)
-            logger.info("Spike {}: Not a spike, inserted by DroSort previously, row removed".format(SpikeInfo['id'][i+offset]))
+            logger.info("Spike {}: Not a spike, inserted by DroSort previously, row removed".format(spike_id))
             offset -= 1
         else:   # this is a detected spike, keep for further reference
             SpikeInfo[new_column][i+offset] = '-2'
             SpikeInfo['good'][i+offset] = False   # definitively do not use for model building
-            logger.info("Spike {}: Not a spike, marked for deletion (-2)".format(SpikeInfo['id'][i+offset]))
+            logger.info("Spike {}: Not a spike, marked for deletion (-2)".format(spike_id))
 
 calc_update_final_frates(SpikeInfo, unit_column, kernel_fast)
 
