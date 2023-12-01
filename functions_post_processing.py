@@ -55,15 +55,15 @@ have been identified as 'A' or 'B' (or unknown). Updates SpikeInfo with new colu
             pass
 
 
-def save_all(results_folder, SpikeInfo, Blk, logger, FinalSpikes= False, f_extension=''):
+def save_all(results_folder, SpikeInfo, Blk, logger, FinalSpikes=False, f_extension=''):
     # store SpikeInfo
-    outpath = results_folder / ('SpikeInfo_%s.csv'%f_extension)
+    outpath = results_folder / ('SpikeInfo_%s.csv' % f_extension)
     logger.info("saving SpikeInfo to %s" % outpath)
-    SpikeInfo.to_csv(outpath, index= False)
+    SpikeInfo.to_csv(outpath, index=False)
 
     if FinalSpikes:
         # store separate spike time lists for A and B cells
-        for unit in ['A','B']:
+        for unit in ['A', 'B']:
             st = SpikeInfo.groupby('unit_final').get_group(unit)['time']
             outpath = results_folder / ('Spikes'+unit+'.csv')
             np.savetxt(outpath, st)
@@ -78,13 +78,13 @@ def save_all(results_folder, SpikeInfo, Blk, logger, FinalSpikes= False, f_exten
 
 """
 
- ########  ########   ######  ########  ########   #######   ######  ########  ######   ######  
- ##     ## ##     ## ##    ## ##     ## ##     ## ##     ## ##    ## ##       ##    ## ##    ## 
- ##     ## ##     ## ##       ##     ## ##     ## ##     ## ##       ##       ##       ##       
- ########  ##     ##  ######  ########  ########  ##     ## ##       ######    ######   ######  
- ##        ##     ##       ## ##        ##   ##   ##     ## ##       ##             ##       ## 
- ##        ##     ## ##    ## ##        ##    ##  ##     ## ##    ## ##       ##    ## ##    ## 
- ##        #########  ######  ##        ##     ##  #######   ######  ########  ######   ######  
+ ########  ########   ######  ########  ########   #######   ######  ########  ######   ######
+ ##     ## ##     ## ##    ## ##     ## ##     ## ##     ## ##    ## ##       ##    ## ##    ##
+ ##     ## ##     ## ##       ##     ## ##     ## ##     ## ##       ##       ##       ##
+ ########  ##     ##  ######  ########  ########  ##     ## ##       ######    ######   ######
+ ##        ##     ##       ## ##        ##   ##   ##     ## ##       ##             ##       ##
+ ##        ##     ## ##    ## ##        ##    ##  ##     ## ##    ## ##       ##    ## ##    ##
+ ##        #########  ######  ##        ##     ##  #######   ######  ########  ######   ######
 
 """
 
@@ -209,7 +209,7 @@ def bounds(ln, n_samples, pos):
     start = max(int(pos-n_samples[0]), 0)   # start index of data in data window
     stop = min(int(pos+n_samples[1]), ln)   # stop index of data in data window
     t_start = max(int(n_samples[0]-pos), 0)   # start index of data taken from template within the template
-    t_stop = t_start+stop-start # stop index of data taken
+    t_stop = t_start+stop-start  # stop index of data taken
     return (start, stop, t_start, t_stop)
 
 
@@ -218,7 +218,7 @@ function dist() - calculate the distance between a data trace and a template at 
 Inputs:
 d - a data window from the experimental data (centred around a candidate spike)
 t - a template of a candidate spike
-n_samples - list of length 2 with number of samples to consider left and right of typical template peak 
+n_samples - list of length 2 with number of samples to consider left and right of typical template peak
 pos - position of the template to be tested, relative to original candidate spike
 unit - name of the neuron unit considered (for axis label if plotting)
 ax - axis to plot into, no plotting if None
@@ -327,3 +327,4 @@ def get_aligned_wmean_by_unit(Waveforms, SpikeInfo, units, unit_column, mode):
         mean_waveforms[unit] = np.average(waveforms, axis=0)
 
     return mean_waveforms
+    
