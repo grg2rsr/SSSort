@@ -205,6 +205,8 @@ if len(units) > 2:
 outpath = plots_folder / ("cluster_reassignments" + fig_format)
 plot_means(normalized_means, units, template_A, template_B, asigs=asigs, outpath=outpath)
 
+logger.info("Figure with cluster assignment saved at %s" % outpath)
+
 # create new column with reassigned labels
 SpikeInfo[new_column] = copy.deepcopy(SpikeInfo[unit_column].values)
 if len(units) > 2:
