@@ -406,29 +406,38 @@ def plot_spike_detect(AnalogSignal, min_prominence=3, N=4, w=0.2 * pq.s, save=No
 
     mad = MAD(AnalogSignal)
 
+    # TODO: fix unefficient ?
+    max_ampl = np.max(AnalogSignal).item()
+
     for i in range(N):
         t_start = np.random.rand() * AnalogSignal.times[-1] - w
+
+        # avoid negative values
+        t_start = t_start*0 if t_start < 0 else t_start
         t_stop = t_start + w
 
         asig = AnalogSignal.time_slice(t_start, t_stop)
-        axes[i].plot(asig.times, asig, color='k', lw=1)
+        axes[i].plot(asig.times, asig, color='k', lw=1, alpha=0.7)
         axes[i].set_xticks([])
 
         for th in [3, 4, 5]:
+            print(mad * th)
             axes[i].axhline(mad * th, color='r', lw=0.5, alpha=1)
             st = spike_detect(asig, mad.magnitude * th, min_prominence=min_prominence, lowpass_freq=None)
             for t in st.times:
-                axes[i].plot([t, t], [0, 10], color='r', lw=th / 5, alpha=1, zorder=1)
+                axes[i].plot([t, t], [0, max_ampl], color='r', lw=th / 5, alpha=1, zorder=1)
 
         nasig = neo.AnalogSignal(asig.magnitude * -1, units=asig.units, t_start=asig.t_start, sampling_rate=asig.sampling_rate)
         for th in [3, 4, 5]:
             axes[i].axhline(mad * -th, color='r', lw=0.5, alpha=1)
             st = spike_detect(nasig, mad.magnitude * th, min_prominence)
             for t in st.times:
-                axes[i].plot([t, t], [-10, 0], color='r', lw=th / 5, alpha=1, zorder=1)
+                axes[i].plot([t, t], [-max_ampl, 0], color='r', lw=th / 5, alpha=1, zorder=1)
 
     for ax in axes:
-        ax.set_ylim(-5, 5)  # if zscored
+        # ax.set_ylim(-5, 5)  # if zscored
+        ax.set_ylim(-max_ampl, max_ampl)
+
         ax.axhline(0, color='gray', lw=0.5, alpha=1, zorder=-1)
 
     sns.despine(fig, bottom=True)
@@ -439,6 +448,82 @@ def plot_spike_detect(AnalogSignal, min_prominence=3, N=4, w=0.2 * pq.s, save=No
         plt.close(fig)
 
     return fig, axes
+
+
+#TODO reduce complexity and combine to plot_compare spike events
+def plot_spike_events(Segment, thres, min_prominence, wsize=4,max_window=1,max_row=5,save=None,save_format='.png',show=False,st=None,rejs=None):
+    plt.rcParams.update({'font.size': 5})
+    for asig in Segment.analogsignals:  
+        max_window = int(max_window*asig.sampling_rate) #FIX conversion from secs to points
+
+        asig=asig.reshape(asig.shape[0])
+        asig_max= np.amax(asig)
+        asig_min= np.amin(asig)
+        n_rows = asig.shape[0]//max_window #compute number of rows needed to plot complete signal
+        n_plots = n_rows//max_row+ int(not(n_rows/max_row).is_integer())
+
+        #Plot max_row rows per window, plots n_plots to plot the complete signal
+        for i_fig in range(0,n_plots):
+            fig, axes = plt.subplots(nrows=max_row,sharey=True)
+
+            for idx in range(0,max_row): #plot the max_row axes.
+                #plot analog signal
+                ini = i_fig*max_window*max_row+idx * max_window
+                end = i_fig*max_window*max_row+idx * max_window+max_window
+                
+                end = min(end,asig.data.shape[0])-1
+                if ini >= asig.data.shape[0]:
+                    break
+
+                axes[idx].plot(asig.times[ini:end],asig.data[ini:end],linewidth=1,color='k')
+                
+                if st is None:
+                    st = Segment.spiketrains[0] #get spike trains (assuming there's only one spike train)
+
+                t_ini = asig.times[ini]; t_end = asig.times[end]
+                #get events in this chunk
+                t_events = st.times[np.where((st.times > t_ini) & (st.times < t_end))]
+                # #get events amplitude value (spike)
+                # a_events = Waveforms[:,np.where((st.times > t_ini) & (st.times < t_end))] 
+                # print(a_events.shape)
+                # a_events = [np.max(a, axis=2)[0] for a in a_events]
+                # print(a_events)
+
+                # TODO: fix unefficient ?
+                max_ampl = np.max(asig.data[ini:end]).item()
+                a_events = np.ones(t_events.shape) * max_ampl
+
+                if rejs is not None:
+                    chunk_r = rejs[np.where((rejs > t_ini) & (rejs < t_end))]
+                    axes[idx].plot(chunk_r,asig_max*np.ones(chunk_r.shape),'|',markersize=5,color='r',label='rejected_spikes')
+
+                axes[idx].plot(t_events,a_events,'|',markersize=5,label='detected_spikes',c=[ 0.5, 1.0, 0.5])
+                axes[idx].plot(asig.times[ini:end],np.ones(asig.times[ini:end].shape)*thres,linewidth=0.5, label='amplitude')
+                axes[idx].plot(asig.times[ini:end],np.ones(asig.times[ini:end].shape)*min_prominence,linewidth=0.5, color='darkgreen', label='min_prominence')
+                # axes[idx].set_ylim(asig_min*1.1,asig_max*1.1)
+            if idx ==0:
+                break
+
+            #set plot info:
+            fig.suptitle("Spike Detection (%d/%d)"%(i_fig+1,n_plots))
+            axes[idx].set_xlabel("Time (%s)"%str(asig.times.units).split()[-1])
+            v_unit = str(asig.units).split()[-1]
+            if v_unit == 'dimensionless':
+                v_unit = 'V'
+            axes[idx//2].set_ylabel("Voltage (%s)"%v_unit)
+
+            plt.tight_layout()
+            plt.legend()
+
+            if save is not None:
+                fig.savefig(str(save)+"_%d"%i_fig+save_format)
+
+            if show:
+                plt.show()
+            else:
+                plt.close(fig)
+
+    # return fig, axes
 
 
 """

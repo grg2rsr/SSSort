@@ -136,16 +136,18 @@ if min_prominence == 0:
 wsize = Config.getfloat('spike detect', 'wsize') * pq.ms
 spike_detect_only = Config.getboolean('spike detect', 'spike_detect_only')
 
-# if only spike detection: diagnostic plot and and quit
-if spike_detect_only:
-    j = np.random.randint(len(Blk.segments))
-    seg = Blk.segments[j]  # select a segment at random
-    AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
-    plt.ion()
-    plot_spike_detect(AnalogSignal, min_prominence, N=5, w=0.35 * pq.s)
-    logger.info("only spike detection - press enter to quit")
-    input()  # halt terminal here
-    sys.exit()
+logger.info("amplitude was %f, global_mad is %f, used mad is: %f"%(mad_thresh, global_mad, mad_thresh*global_mad))
+
+# # if only spike detection: diagnostic plot and and quit
+# if spike_detect_only:
+#     j = np.random.randint(len(Blk.segments))
+#     seg = Blk.segments[j]  # select a segment at random
+#     AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
+#     plt.ion()
+#     plot_spike_detect(AnalogSignal, min_prominence, N=5, w=0.35 * pq.s)
+#     logger.info("only spike detection - press enter to quit")
+#     input()  # halt terminal here
+#     sys.exit()
 
 for i, seg in enumerate(Blk.segments):
     AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
@@ -166,6 +168,25 @@ for i, seg in enumerate(Blk.segments):
     st_cut = st.time_slice(st.t_start + wsize / 2, st.t_stop - wsize / 2)
     st_cut.t_start = st.t_start
     seg.spiketrains.append(st_cut)
+   
+    # if only spike detection: diagnostic plot and and quit
+    if spike_detect_only:
+        # j = np.random.randint(len(Blk.segments))
+        # seg = Blk.segments[j]  # select a segment at random
+        # AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
+        # plt.ion()
+        # plot_spike_detect(AnalogSignal, min_prominence, N=5, w=0.35 * pq.s)
+
+        #Plot detected spikes
+        namepath = plots_folder / ("first_spike_detection_%d"%i)
+        plot_spike_events(seg, min_prominence=min_prominence, thres=MAD(AnalogSignal)*mad_thresh,save=namepath,save_format=fig_format,max_window=0.4,max_row=3)
+
+        logger.info("detected spikes plotted")
+
+        logger.info("only spike detection - press enter to quit")
+        input()  # halt terminal here
+        sys.exit()
+
 
 n_spikes = np.sum([seg.spiketrains[0].shape[0] for seg in Blk.segments])
 logger.info("total number of detected spikes: %i" % n_spikes)
