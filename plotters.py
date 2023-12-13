@@ -475,7 +475,12 @@ def plot_spike_events(Segment, thres, min_prominence, wsize=4,max_window=1,max_r
                 if ini >= asig.data.shape[0]:
                     break
 
-                axes[idx].plot(asig.times[ini:end],asig.data[ini:end],linewidth=1,color='k')
+                # Convert memory view to NumPy array
+                data_array = np.array(asig.data)
+                # Convert quantity to NumPy array
+                times_array = asig.times.magnitude
+
+                axes[idx].plot(times_array[ini:end],data_array[ini:end],linewidth=1,color='k')
                 
                 if st is None:
                     st = Segment.spiketrains[0] #get spike trains (assuming there's only one spike train)
@@ -483,11 +488,6 @@ def plot_spike_events(Segment, thres, min_prominence, wsize=4,max_window=1,max_r
                 t_ini = asig.times[ini]; t_end = asig.times[end]
                 #get events in this chunk
                 t_events = st.times[np.where((st.times > t_ini) & (st.times < t_end))]
-                # #get events amplitude value (spike)
-                # a_events = Waveforms[:,np.where((st.times > t_ini) & (st.times < t_end))] 
-                # print(a_events.shape)
-                # a_events = [np.max(a, axis=2)[0] for a in a_events]
-                # print(a_events)
 
                 # TODO: fix unefficient ?
                 max_ampl = np.max(asig.data[ini:end]).item()
@@ -496,6 +496,7 @@ def plot_spike_events(Segment, thres, min_prominence, wsize=4,max_window=1,max_r
                 if rejs is not None:
                     chunk_r = rejs[np.where((rejs > t_ini) & (rejs < t_end))]
                     axes[idx].plot(chunk_r,asig_max*np.ones(chunk_r.shape),'|',markersize=5,color='r',label='rejected_spikes')
+
 
                 axes[idx].plot(t_events,a_events,'|',markersize=5,label='detected_spikes',c=[ 0.5, 1.0, 0.5])
                 axes[idx].plot(asig.times[ini:end],np.ones(asig.times[ini:end].shape)*thres,linewidth=0.5, label='amplitude')
