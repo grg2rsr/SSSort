@@ -302,7 +302,7 @@ try:
     spike_range = range(pd.Index(SpikeInfo['id']).get_loc(spkr[0]),
                         pd.Index(SpikeInfo['id']).get_loc(spkr[1]))
 except:
-    logger.info("spike index range not valid, reverting to processing all")
+    logger.warning("spike index range not valid, reverting to processing all")
     spike_range = range(1, len(unit_ids)-1)
 
 spike_label_interval = Config.getint('output', 'spike_label_interval')
@@ -314,6 +314,35 @@ as_max = np.amax(asig)
 y_lim = [1.05*as_min, 1.05*as_max]
 n_wd = int(sz_wd*ifs)
 n_wdh = n_wd//2
+
+
+# Normalize maximum distances to Average of MAX amplitude of models. 
+templates = {}
+amplitudes = []
+
+colors = ['b', 'g']
+# plt.figure()
+for u, unit in enumerate(['A', 'B']):
+    min_frate = np.min(frate[unit][frate[unit]>0])
+    print("Min frate for unit ",unit, min_frate)
+    templates[unit] = make_single_template(Models[unit], min_frate)
+    templates[unit] = align_to(templates[unit], align_mode)
+
+    amplitudes.append(np.max(templates[unit])-np.min(templates[unit]))
+    # plt.plot(templates[unit], color=colors[u])
+
+print("Amplitudes for min firing rate", amplitudes)
+avg_amplitude = np.mean(amplitudes)
+
+d_accept_norm = d_accept * avg_amplitude
+d_reject_norm = d_reject * avg_amplitude
+
+logger.info("Max distance for auto accept (%.3f) scaled to %.3f"%(d_accept, d_accept_norm))
+logger.info("Max distance for auto reject (%.3f) scaled to %.3f"%(d_reject, d_reject_norm))
+
+d_accept = d_accept_norm
+d_reject = d_reject_norm
+# plt.show()
 
 """
 ##     ##      ###     ##   ##    ##    ##        #######    #######   ########
@@ -359,7 +388,7 @@ for i in spike_range:
     for unit in units[:2]:
         templates[unit] = make_single_template(Models[unit], frate[unit][i])
         templates[unit] = align_to(templates[unit], align_mode)
-
+        
         for pos in range(n_wdh-same_spike_tolerance, n_wdh + same_spike_tolerance):
             d.append(dist(v, templates[unit], n_samples, pos))
             sh.append(pos)
