@@ -133,7 +133,7 @@ mad_thresh = Config.getfloat('spike detect', 'amplitude')
 min_prominence = Config.getfloat('spike detect', 'min_prominence')
 if min_prominence == 0:
     min_prominence = None
-wsize = Config.getfloat('spike detect', 'wsize') * pq.ms
+wsize = Config.getint('spike detect', 'wsize') * pq.ms
 spike_detect_only = Config.getboolean('spike detect', 'spike_detect_only')
 
 logger.info("amplitude was %f, global_mad is %f, used mad is: %f"%(mad_thresh, global_mad, mad_thresh*global_mad))
@@ -632,7 +632,7 @@ for j, Seg in enumerate(Blk.segments):
     except:
         seg_name = 'Segment %s'%(Seg.name)
     outpath = plots_folder / (seg_name + '_fitted_spikes' + fig_format)
-    plot_fitted_spikes(Seg, j, Models, SpikeInfo, final_unit_col, zoom=zoom, save=outpath)
+    plot_fitted_spikes(Seg, j, Models, SpikeInfo, final_unit_col, wsize, zoom=zoom, save=outpath)
 
 # plot final models
 outpath = plots_folder / (seg_name + '_models_final' + fig_format)

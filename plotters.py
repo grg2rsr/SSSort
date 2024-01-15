@@ -245,7 +245,7 @@ def plot_segment(Seg, units, sigma=0.05, zscore=False, save=None, colors=None):
     return fig, axes
 
 
-def plot_fitted_spikes(Segment, j, Models, SpikeInfo, unit_column, unit_order=None, zoom=None, save=None, colors=None):
+def plot_fitted_spikes(Segment, j, Models, SpikeInfo, unit_column, wsize, unit_order=None, zoom=None, save=None, colors=None):
     """ plot to inspect fitted spikes """
     fig, axes = plt.subplots(nrows=2, sharex=True, sharey=True)
 
@@ -263,14 +263,14 @@ def plot_fitted_spikes(Segment, j, Models, SpikeInfo, unit_column, unit_order=No
 
     fs = asig.sampling_rate
 
+    # Transform ms in points
+    wsize = (wsize * fs).simplified.magnitude.astype('int32')   
+
     for u, unit in enumerate(units):
         St, = select_by_dict(Segment.spiketrains, unit=unit)
 
         asig_recons = np.zeros(asig.shape[0])
         asig_recons[:] = np.nan
-
-        wsize = 4 * pq.ms  # HARDCODE!
-        wsize = (wsize * fs).simplified.magnitude.astype('int32')  # HARDCODE
 
         inds = (St.times * fs).simplified.magnitude.astype('int32')
         offset = (St.t_start * fs).simplified.magnitude.astype('int32')
@@ -564,7 +564,7 @@ def plot_spike_labels(ax, SpikeInfo, spike_label_interval):
         for x, y, s in zip(xpo, ypo, lbl):
             ax.text(x, y, str(s), ha='center', fontsize=4)
 
-
+# TODO: change wsize by config param + transform
 def plot_by_unit(ax, st, asig, Models, SpikeInfo, unit_column, unit_order=None, colors=None, wsize=40):
     try:
         left = wsize[0]
