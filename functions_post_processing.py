@@ -225,7 +225,7 @@ ax - axis to plot into, no plotting if None
 """
 
 
-def dist(d, t, n_samples, pos, unit=None, ax=None):
+def dist(d, t, n_samples, pos, unit=None, ax=None, avg_amplitude=1):
     # Make a template at position pos expressed as index in data window d
     t2 = np.zeros(len(d))
     start, stop, t_start, t_stop = bounds(len(d), n_samples, pos)
@@ -235,20 +235,20 @@ def dist(d, t, n_samples, pos, unit=None, ax=None):
     d2 = np.zeros(len(d))
     d2[start:stop] = d[start:stop]   # data cropped to comparison region
     dst = np.linalg.norm(d2-t2)
+    dst = dst/(stop-start)
     if ax is not None:
         ax.plot(d, '.', markersize=1, label='org. trace')
         ax.plot(d2, linewidth=0.7, label='comp. region')
         ax.plot(t2, linewidth=0.7, label='template')
         ax.set_ylim(-1.2, 1.2)
         lbl = unit+': d=' if unit is not None else ''
-        ax.set_title(lbl+('%.4f' % (dst/(stop-start))))
+        ax.set_title(lbl+('%.2f' % (dst * 100 / avg_amplitude)+'%'))
         ax.legend()
-    return dst/(stop-start)
-    # return dst
+    return dst
 
 
 # calculate the distance between a data trace and a compound template
-def compound_dist(d, t1, t2, n_samples, pos1, pos2, ax=None):
+def compound_dist(d, t1, t2, n_samples, pos1, pos2, ax=None, avg_amplitude=1):
     # assemble a compound template with positions pos1 and pos2
     t = np.zeros(len(d))
     start1, stop1, t_start1, t_stop1 = bounds(len(d), n_samples, pos1)
@@ -264,15 +264,15 @@ def compound_dist(d, t1, t2, n_samples, pos1, pos2, ax=None):
     stop_r = max(stop1, stop2)
     d2[start_l:stop_r] = d[start_l:stop_r]
     dst = np.linalg.norm(d2-t)
+    dst = dst/(stop_r-start_l)
     if ax is not None:
         ax.plot(d, '.', markersize=1)
         ax.plot(d2, linewidth=0.7)
         ax.plot(t, linewidth=0.7)
         ax.set_ylim(-1.2, 1.2)
         lbl = 'A+B: d=' if pos1 <= pos2 else 'B+A: d='
-        ax.set_title(lbl + ('%.4f' % (dst/(stop_r-start_l))))
-    return dst/(stop_r-start_l)
-    # return dst
+        ax.set_title(lbl + ('%.2f' % (dst * 100 / avg_amplitude)+'%'))
+    return dst
 
 
 # # Populate block anotates spike trains in the segment and add 2 spike trains with each unit.

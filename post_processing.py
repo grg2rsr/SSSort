@@ -80,9 +80,13 @@ if not data_path.is_absolute():
 
 exp_name = Config.get('path', 'experiment_name')
 results_folder = config_path.parent / exp_name / 'results'
-plots_folder = results_folder / 'plots_post' / 'post_process_all'
+plots_folder = results_folder / 'plots_post'
+checked_folder = plots_folder / 'checked_spikes'
+fitted_folder = plots_folder / 'fitted_spikes'
 
 os.makedirs(plots_folder, exist_ok=True)
+os.makedirs(checked_folder, exist_ok=True)
+os.makedirs(fitted_folder, exist_ok=True)
 
 # create and config logger for writing to file
 sssio.get_logger(exp_name)
@@ -159,8 +163,8 @@ template_A, template_B, Waveforms = resize_waveforms(template_A, template_B, Wav
 
 logger.info("Current units: %s" % units)
 
-distances_a = []
-distances_b = []
+distances_A = []
+distances_B = []
 
 mode = 'peak'
 
@@ -180,19 +184,19 @@ normalized_means = [mean_wave*norm_factor for unit, mean_wave
                     in mean_waveforms.items()]
 
 # Compare waveform units to templates
-distances_a = [np.linalg.norm(mean-template_A) for mean in normalized_means]
-distances_b = [np.linalg.norm(mean-template_B) for mean in normalized_means]
+distances_A = [np.linalg.norm(mean-template_A) for mean in normalized_means]
+distances_B = [np.linalg.norm(mean-template_B) for mean in normalized_means]
 
-logger.info("Distances to a: ")
+logger.info("Distances to A: ")
 logger.info("\t\t%s" % str(units))
-logger.info("\t\t%s" % str(distances_a))
-logger.info("Distances to b: ")
+logger.info("\t\t%s" % ', '.join(map(lambda x: "%.3f" % x, distances_A)))
+logger.info("Distances to B: ")
 logger.info("\t\t%s" % str(units))
-logger.info("\t\t%s" % str(distances_b))
+logger.info("\t\t%s" % ', '.join(map(lambda x: "%.3f" % x, distances_B)))
 
 # Get best assignments
-a_unit = units[np.argmin(distances_a)]
-b_unit = units[np.argmin(distances_b)]
+a_unit = units[np.argmin(distances_A)]
+b_unit = units[np.argmin(distances_B)]
 if len(units) > 2:
     non_unit = [unit for unit in units if a_unit not in unit and b_unit not in unit][0]
 
@@ -205,7 +209,7 @@ if len(units) > 2:
 outpath = plots_folder / ("cluster_reassignments" + fig_format)
 plot_means(normalized_means, units, template_A, template_B, asigs=asigs, outpath=outpath)
 
-logger.info("Figure with cluster assignment saved at %s" % outpath)
+#logger.info("Figure with cluster assignment saved at %s" % outpath)
 
 # create new column with reassigned labels
 SpikeInfo[new_column] = copy.deepcopy(SpikeInfo[unit_column].values)
@@ -268,7 +272,7 @@ calc_update_final_frates(SpikeInfo, unit_column, kernel_fast)
 # TODO: try to reuse resized waveforms from cluster identification
 waveforms_path = config_path.parent / results_folder / "Waveforms.npy"
 Waveforms = np.load(waveforms_path)
-logger.info('templates read from %s' % waveforms_path)
+#logger.info('templates read from %s' % waveforms_path)
 
 n_model_comp = Config.getint('spike model', 'n_model_comp')
 
@@ -292,6 +296,7 @@ same_spike_tolerance = int(same_spike_tolerance*ifs)  # in time steps
 d_accept = Config.getfloat('postprocessing', 'max_dist_for_auto_accept')
 d_reject = Config.getfloat('postprocessing', 'min_dist_for_auto_reject')
 min_diff = Config.getfloat('postprocessing', 'min_diff_for_auto_accept')
+max_diff_single = Config.getfloat('postprocessing', 'max_diff_for_auto_single')
 wsize = Config.getfloat('spike detect', 'wsize')
 max_spike_diff = int(Config.getfloat('postprocessing', 'max_compound_spike_diff') * ifs)
 n_samples = np.array(Config.get('postprocessing', 'template_window').split(','), dtype='float32')/1000.0
@@ -324,21 +329,17 @@ colors = ['b', 'g']
 # plt.figure()
 for u, unit in enumerate(['A', 'B']):
     min_frate = np.min(frate[unit][frate[unit]>0])
-    print("Min frate for unit ",unit, min_frate)
+    #print("Min frate for unit ",unit, min_frate)
     templates[unit] = make_single_template(Models[unit], min_frate)
     templates[unit] = align_to(templates[unit], align_mode)
 
     amplitudes.append(np.max(templates[unit])-np.min(templates[unit]))
     # plt.plot(templates[unit], color=colors[u])
 
-print("Amplitudes for min firing rate", amplitudes)
 avg_amplitude = np.mean(amplitudes)
 
-d_accept_norm = d_accept * avg_amplitude
-d_reject_norm = d_reject * avg_amplitude
-
-logger.info("Max distance for auto accept (%.3f) scaled to %.3f"%(d_accept, d_accept_norm))
-logger.info("Max distance for auto reject (%.3f) scaled to %.3f"%(d_reject, d_reject_norm))
+d_accept_norm = d_accept / 100 * avg_amplitude
+d_reject_norm = d_reject / 100 * avg_amplitude
 
 d_accept = d_accept_norm
 d_reject = d_reject_norm
@@ -409,34 +410,40 @@ for i in spike_range:
     best = np.argmin(d)
     best2 = np.argmin(d2)
     d_min = min(d[best], d2[best2])
-    choice = 1 if d[best] <= d2[best2] else 2
     d_diff = abs(d[best]-d2[best2])
+    d_norm = d[best] * 100 / avg_amplitude
+    d2_norm = d2[best2] * 100 / avg_amplitude
+    d_diff_norm = d_diff * 100 / avg_amplitude
+    choice = 1 if d[best] <= d2[best2] else 2
+    choice = 1 if ((200*d_diff/(d[best]+d2[best2])) < max_diff_single) else choice
 
-    logger.info("Spike {}: Single spike d={}, compound spike d={}, difference={}".format(spike_id,
-                ('%.4f' % d[best]), ('%.4f' % d2[best2]), ('%.4f' % d_diff)))
+    logger.info("Spike {}: Single spike d={}%, compound spike d={}%, difference={}%".format(spike_id,
+                ('%.2f' % d_norm), ('%.2f' % d2_norm), ('%.2f' % d_diff_norm)))
 
     # plot params
     zoom = (float(stimes[i])-sz_wd/1000*20, float(stimes[i])+sz_wd/1000*20)
     colors = get_colors(['A', 'B'], keep=False)
 
-    if d_min >= d_accept or 200*d_diff/(d[best]+d2[best2]) < min_diff:
+    # if d_min >= d_accept or 200*d_diff/(d[best]+d2[best2]) < min_diff:
+    if d_min >= d_accept or (200*d_diff/(d[best]+d2[best2]) < min_diff and 200*d_diff/(d[best]+d2[best2]) > max_diff_single):
         # make plots and save them
         fig2, ax2 = plot_fitted_spikes_pp(seg, Models, SpikeInfo, new_column,
                                           zoom=zoom, box=(float(stimes[i]), sz_wd/1000),
                                           wsize=n_samples,
                                           spike_label_interval=spike_label_interval, colors=colors)
 
-        outpath = plots_folder / (str(spike_id) + '_context_plot' + fig_format)
+        outpath = checked_folder / (str(spike_id) + '_context_plot' + fig_format)
         ax2[1].plot(stimes[i], 1, '.', color='y')
 
         fig2.savefig(outpath)
 
-        fig, ax = plt.subplots(ncols=2, sharey=True, figsize=[4, 2])
-        dist(v, templates[un[best]], n_samples, sh[best], unit=un[best], ax=ax[0])
+        fig, ax = plt.subplots(ncols=2, sharey=True, figsize=[4, 3])
+        dist(v, templates[un[best]], n_samples, sh[best], unit=un[best], ax=ax[0], avg_amplitude=avg_amplitude)
         ax[0].set_ylim(y_lim)
-        compound_dist(v, templates['A'], templates['B'], n_samples, sh2[best2][0], sh2[best2][1], ax[1])
+        compound_dist(v, templates['A'], templates['B'], n_samples, sh2[best2][0], sh2[best2][1], ax[1], avg_amplitude=avg_amplitude)
         ax[1].set_ylim(y_lim)
-        outpath = plots_folder / (str(spike_id) + '_template_matches' + fig_format)
+        outpath = checked_folder / (str(spike_id) + '_template_matches' + fig_format)
+        plt.suptitle(("d_accept={}%  d_reject={}%".format(('%.2f' % (d_accept * 100 / avg_amplitude)), ('%.2f' % (d_reject * 100 / avg_amplitude)))))
         fig.savefig(outpath)
         if d_min > d_reject:
             choice = 0
@@ -446,7 +453,7 @@ for i in spike_range:
             fig.show()
             # ask user
             if (200*d_diff/(d[best]+d2[best2]) <= min_diff):
-                reason = "two very close matches"
+                reason = "two very close matches {}%".format('%.2f' % (200*d_diff/(d[best]+d2[best2])))
             elif d_min >= d_accept:
                 reason = "no good match but not bad enough to reject"
             print("User feedback required: "+reason)
@@ -602,12 +609,12 @@ do_plot = Config.getboolean('postprocessing', 'plot_fitted_spikes')
 
 if do_plot:
     logger.info("creating plots")
-    outpath = plots_folder / ('overview' + fig_format)
+    outpath = fitted_folder / ('overview' + fig_format)
     plot_segment(seg, units, save=outpath, colors=colors)
 
     max_window = Config.getfloat('output', 'max_window_fitted_spikes_overview')
     plot_fitted_spikes_complete(seg, Models, SpikeInfo, new_column, max_window,
-                                plots_folder, fig_format, wsize=n_samples,
+                                fitted_folder, fig_format, wsize=n_samples,
                                 extension='_templates', spike_label_interval=spike_label_interval,
                                 colors=colors)
     logger.info("plotting done")
