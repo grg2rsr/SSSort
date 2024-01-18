@@ -399,8 +399,7 @@ def plot_clustering(Waveforms, SpikeInfo, unit_column, color_by=None, n_componen
 
     return fig, axes
 
-
-def plot_spike_detect(AnalogSignal, min_prominence=3, N=4, w=0.2 * pq.s, save=None):
+def plot_spike_detect(AnalogSignal, min_prominence=3, thres=1, N=4, w=0.2 * pq.s, save=None):
     """ """
     fig, axes = plt.subplots(nrows=N, sharey=True)
 
@@ -419,20 +418,8 @@ def plot_spike_detect(AnalogSignal, min_prominence=3, N=4, w=0.2 * pq.s, save=No
         asig = AnalogSignal.time_slice(t_start, t_stop)
         axes[i].plot(asig.times, asig, color='k', lw=1, alpha=0.7)
         axes[i].set_xticks([])
-
-        for th in [3, 4, 5]:
-            print(mad * th)
-            axes[i].axhline(mad * th, color='r', lw=0.5, alpha=1)
-            st = spike_detect(asig, mad.magnitude * th, min_prominence=min_prominence, lowpass_freq=None)
-            for t in st.times:
-                axes[i].plot([t, t], [0, max_ampl], color='r', lw=th / 5, alpha=1, zorder=1)
-
-        nasig = neo.AnalogSignal(asig.magnitude * -1, units=asig.units, t_start=asig.t_start, sampling_rate=asig.sampling_rate)
-        for th in [3, 4, 5]:
-            axes[i].axhline(mad * -th, color='r', lw=0.5, alpha=1)
-            st = spike_detect(nasig, mad.magnitude * th, min_prominence)
-            for t in st.times:
-                axes[i].plot([t, t], [-max_ampl, 0], color='r', lw=th / 5, alpha=1, zorder=1)
+        axes[i].plot(asig.times,np.ones(asig.times.shape)*thres,linewidth=0.5, label='amplitude')
+        axes[i].plot(asig.times,np.ones(asig.times.shape)*min_prominence,linewidth=0.5, color='red', label='min_prominence')
 
     for ax in axes:
         # ax.set_ylim(-5, 5)  # if zscored
@@ -442,6 +429,7 @@ def plot_spike_detect(AnalogSignal, min_prominence=3, N=4, w=0.2 * pq.s, save=No
 
     sns.despine(fig, bottom=True)
     fig.tight_layout()
+    plt.legend()
 
     if save is not None:
         fig.savefig(save)

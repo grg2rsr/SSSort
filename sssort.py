@@ -58,14 +58,17 @@ if not data_path.is_absolute():
 
 exp_name = Config.get('path', 'experiment_name')
 results_folder = config_path.parent / exp_name / 'results'
-plots_folder = results_folder / 'plots'
+plots_folder = results_folder / 'plots_sssort'
+detected_folder = plots_folder / 'detected_spikes'
+fitted_folder = plots_folder / 'fitted_spikes'
+
 os.makedirs(plots_folder, exist_ok=True)
+os.makedirs(detected_folder, exist_ok=True)
+os.makedirs(fitted_folder, exist_ok=True)
+
 os.chdir(config_path.parent / exp_name)
 
-
 logger = sssio.get_logger(exp_name)
-
-
 
 logger.info('config file read from %s' % config_path)
 
@@ -133,22 +136,30 @@ mad_thresh = Config.getfloat('spike detect', 'amplitude')
 min_prominence = Config.getfloat('spike detect', 'min_prominence')
 if min_prominence == 0:
     min_prominence = None
-wsize = Config.getint('spike detect', 'wsize') * pq.ms
+wsize = Config.getfloat('spike detect', 'wsize') * pq.ms
 spike_detect_only = Config.getboolean('spike detect', 'spike_detect_only')
 
 logger.info("amplitude was %f, global_mad is %f, used mad is: %f"%(mad_thresh, global_mad, mad_thresh*global_mad))
+logger.info("min_prominence was %f, global_mad is %f, used min_prominence is: %f"%(min_prominence, global_mad, min_prominence*global_mad))
 
-# # if only spike detection: diagnostic plot and and quit
-# if spike_detect_only:
-#     j = np.random.randint(len(Blk.segments))
-#     seg = Blk.segments[j]  # select a segment at random
-#     AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
-#     plt.ion()
-#     plot_spike_detect(AnalogSignal, min_prominence, N=5, w=0.35 * pq.s)
-#     logger.info("only spike detection - press enter to quit")
-#     input()  # halt terminal here
-#     sys.exit()
+min_prominence = min_prominence *global_mad
 
+# if only spike detection: diagnostic plot and option to continue with spike detection
+if spike_detect_only:
+
+    j = np.random.randint(len(Blk.segments))
+    seg = Blk.segments[j]  # select a segment at random
+    AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
+    plt.ion()
+    plot_spike_detect(AnalogSignal, min_prominence, thres = mad_thresh*global_mad, N=5, w=2 * pq.s)
+
+    # ask for user input to quit or keep going
+    if input("use displayed values for full spike detection check (Y/N)?").upper() == 'N':
+        sys.exit()
+    else:
+        pass
+    plt.ioff()
+    
 for i, seg in enumerate(Blk.segments):
     AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
 
@@ -169,27 +180,32 @@ for i, seg in enumerate(Blk.segments):
     st_cut.t_start = st.t_start
     seg.spiketrains.append(st_cut)
    
-    # if only spike detection: diagnostic plot and and quit
-    if spike_detect_only:
         # j = np.random.randint(len(Blk.segments))
         # seg = Blk.segments[j]  # select a segment at random
         # AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
         # plt.ion()
         # plot_spike_detect(AnalogSignal, min_prominence, N=5, w=0.35 * pq.s)
 
-        #Plot detected spikes
-        namepath = plots_folder / ("first_spike_detection_%d"%i)
-        plot_spike_events(seg, min_prominence=min_prominence, thres=MAD(AnalogSignal)*mad_thresh,save=namepath,save_format=fig_format,max_window=0.4,max_row=3)
+    #Plot detected spikes
+    namepath = detected_folder / ("spike_detection_%d"%i)
+    plot_spike_events(seg, min_prominence=min_prominence, thres=MAD(AnalogSignal)*mad_thresh,save=namepath,save_format=fig_format,max_window=0.4,max_row=3)
 
-        logger.info("detected spikes plotted")
+    logger.info("detected spikes plotted")
 
+    # if only spike detection: diagnostic plot and and quit
+    if spike_detect_only:
         logger.info("only spike detection - press enter to quit")
         input()  # halt terminal here
         sys.exit()
 
-
 n_spikes = np.sum([seg.spiketrains[0].shape[0] for seg in Blk.segments])
 logger.info("total number of detected spikes: %i" % n_spikes)
+
+# if only spike detection: diagnostic plot and and quit
+if spike_detect_only:
+    logger.info("only spike detection - press enter to quit")
+    input()  # halt terminal here
+    sys.exit()
 
 """
  
@@ -637,8 +653,22 @@ for j, Seg in enumerate(Blk.segments):
 # plot final models
 outpath = plots_folder / (seg_name + '_models_final' + fig_format)
 plot_Models(Models, save=outpath)
-logger.info("all plotting done")
 
+do_plot = Config.getboolean('spike sort', 'plot_fitted_spikes')
+if do_plot:
+    logger.info("creating plots")
+    units = get_units(SpikeInfo, this_unit_col)
+    colors = get_colors(units)
+    outpath = detected_folder / ('overview' + fig_format)
+    plot_segment(seg, units, save=outpath, colors=colors)
+    spike_label_interval = Config.getint('output', 'spike_label_interval')
+    max_window = Config.getfloat('output', 'max_window_fitted_spikes_overview')
+    plot_fitted_spikes_complete(seg, Models, SpikeInfo, final_unit_col, max_window,
+                                detected_folder, fig_format, wsize=n_samples,
+                                extension='_templates', spike_label_interval=spike_label_interval,
+                                colors=colors)
+
+logger.info("plotting done")
 
 logger.info("all tasks done - quitting")
 sys.exit()
