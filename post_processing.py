@@ -602,8 +602,10 @@ units = get_units(SpikeInfo, unit_column)
 logger.info("Number of spikes in trace: %d" % SpikeInfo[new_column].size)
 logger.info("Number of clusters: %d" % len(units))
 
+cols = ['id', 'time', 'good', 'unit_final']
+
 # warning firing rates not saved, too high memory use.
-save_all(results_folder, SpikeInfo, Blk, logger, FinalSpikes=True, f_extension='post')
+save_all(results_folder, SpikeInfo[cols], Blk, logger, FinalSpikes=True, f_extension='post')
 
 do_plot = Config.getboolean('postprocessing', 'plot_fitted_spikes')
 
