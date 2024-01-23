@@ -132,8 +132,8 @@ if Config.getboolean('preprocessing', 'z_score'):
 logger.info(' - spike detect - ')
 
 global_mad = np.average([MAD(seg.analogsignals[0]) for seg in Blk.segments])
-mad_thresh = Config.getfloat('spike detect', 'amplitude')
-min_prominence = Config.getfloat('spike detect', 'min_prominence')
+mad_thresh = Config.getfloat('spike detect', 'min_theshold_scale')
+min_prominence = Config.getfloat('spike detect', 'min_prominence_scale')
 if min_prominence == 0:
     min_prominence = None
 wsize = Config.getfloat('spike detect', 'wsize') * pq.ms
@@ -141,7 +141,7 @@ wsize = Config.getfloat('spike detect', 'wsize') * pq.ms
 spike_detect_only = Config.getboolean('spike detect', 'spike_detect_only')
 extense_plot = Config.getboolean('spike sort', 'plot_fitted_spikes_extense')
 
-logger.info("amplitude was %f, global_mad is %f, used mad is: %f"%(mad_thresh, global_mad, mad_thresh*global_mad))
+logger.info("min_theshold_scale was %f, global_mad is %f, used mad is: %f"%(mad_thresh, global_mad, mad_thresh*global_mad))
 logger.info("min_prominence was %f, global_mad is %f, used min_prominence is: %f"%(min_prominence, global_mad, min_prominence*global_mad))
 
 min_prominence = min_prominence *global_mad
