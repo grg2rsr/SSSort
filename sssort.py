@@ -415,6 +415,17 @@ for it in range(1, n_max_iter):
     n_changes, _ = get_changes(SpikeInfo, this_unit_col)
     logger.info("Iteration: %i - Error: %.2e - # reassigned spikes: %s" % (it, Rss_sum, n_changes))
 
+    #Plot zoom inspect for current iteration
+    zoom = np.array(Config.get('output', 'zoom').split(','), dtype='float32') / 1000
+    for j, Seg in enumerate(Blk.segments):
+        try:
+            seg_name = Path(Seg.annotations['filename']).stem
+        except:
+            seg_name = 'Segment %s'%(Seg.name)
+
+        outpath = plots_folder / (seg_name + '_fitted_spikes_' + str(it) + fig_format)
+        plot_fitted_spikes_pp(Seg, Models, SpikeInfo, this_unit_col, zoom=zoom, save=outpath)
+
     if check_convergence(SpikeInfo, it, n_hist, conv_crit):  # refactor conv_crit into 'tol'
 
         logger.info("convergence criterion reached")
