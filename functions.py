@@ -529,11 +529,6 @@ def best_merge(Avgs, Sds, units, alpha=1, exclude=[]):
             Q[i,j] = np.inf
             Q[j,i] = np.inf
 
-            # old code
-            # pair = tuple([units.index(e) for e in exclude_pair])
-            # if pair in merge_candidates:
-            #     merge_candidates.remove(pair)
-
     merge_candidates = list(zip(np.arange(Q.shape[0]), np.argmin(Q, 1)))
     for i in range(Q.shape[0]):
         if (i, i) in merge_candidates:
