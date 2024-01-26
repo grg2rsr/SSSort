@@ -159,27 +159,13 @@ if min_prominence == 0:
     min_prominence = None
 wsize = Config.getfloat('spike detect', 'wsize') * pq.ms
 spike_detect_only = Config.getboolean('spike detect', 'spike_detect_only')
-
-# if only spike detection: diagnostic plot and and quit
-if spike_detect_only:
-    j = np.random.randint(len(Blk.segments))
-    seg = Blk.segments[j]  # select a segment at random
-    AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
-    plt.ion()
-    plot_spike_detect(AnalogSignal, min_prominence, N=5, w=0.35 * pq.s)
-    logger.info("only spike detection - press enter to quit")
-    input()  # halt terminal here
-    sys.exit()
+peak_mode = Config.get('spike detect', 'peak_mode')
 
 for i, seg in enumerate(Blk.segments):
     AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
 
-    # inverting
-    if Config.get('spike detect', 'peak_mode') == 'negative':
-        AnalogSignal *= -1
-
     # spike detection
-    st = spike_detect(AnalogSignal, global_mad * mad_thresh, min_prominence)
+    st = spike_detect(AnalogSignal, global_mad * mad_thresh, min_prominence, mode=peak_mode, lowpass_freq=5*pq.kHz)
     st.annotate(kind='all_spikes')
 
     # remove border spikes
@@ -189,6 +175,19 @@ for i, seg in enumerate(Blk.segments):
 
 n_spikes = np.sum([seg.spiketrains[0].shape[0] for seg in Blk.segments])
 logger.info("total number of detected spikes: %i" % n_spikes)
+
+# # if only spike detection: diagnostic plot and and quit
+if spike_detect_only:
+    j = np.random.randint(len(Blk.segments))
+    seg = Blk.segments[j]  # select a segment at random
+    AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
+    plt.ion()
+    mpl.rcParams['figure.dpi'] = 166 # FIXME Config.get('output', 'fig_dpi')
+    plot_spike_detect_hist(AnalogSignal, mad_thresh, min_prominence)
+    # plot_spike_detect(AnalogSignal, min_prominence, N=5, w=0.35 * pq.s)
+    logger.info("only spike detection - press enter to quit")
+    input()  # halt terminal here
+    sys.exit()
 
 """
  
