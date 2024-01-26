@@ -144,7 +144,7 @@ def plot_compare_waveforms(Waveforms, SpikeInfo, unit_column, dt, units_compare,
         all_units = get_units(SpikeInfo, unit_column)
         colors = get_colors(all_units)
 
-    tvec = np.arange(-1 * Waveforms.shape[0] * dt / 2, Waveforms.shape[0] * dt / 2, dt)
+    tvec = np.linspace(-1 * Waveforms.shape[0] * dt / 2, Waveforms.shape[0] * dt / 2, Waveforms.shape[0]) * 1e3
 
     fig, axes = plt.subplots(ncols=3, sharey=True, figsize=[6, 3])
 
@@ -273,7 +273,9 @@ def plot_fitted_spikes(Segment, j, Models, SpikeInfo, unit_column, unit_order=No
         offset = (St.t_start * fs).simplified.magnitude.astype('int32')
         inds = inds - offset
 
-        SIgroups = SpikeInfo.groupby([unit_column, 'segment'])
+        ix = np.logical_and(SpikeInfo['time'].values > St.t_start, SpikeInfo['time'].values < St.t_stop)
+        SIgroups = SpikeInfo.iloc[ix].groupby([unit_column, 'segment'])
+        
         if (unit, j) in SIgroups.groups:
             frates = SIgroups.get_group((unit, j))['frate_fast'].values
             pred_spikes = [Models[unit].predict(f) for f in frates]
@@ -386,6 +388,40 @@ def plot_clustering(Waveforms, SpikeInfo, unit_column, color_by=None, n_componen
     fig.suptitle(title)
     fig.tight_layout()
     fig.subplots_adjust(top=0.9)
+
+    if save is not None:
+        fig.savefig(save)
+        plt.close(fig)
+
+    return fig, axes
+
+def plot_spike_detect_hist(AnalogSignal, mad_thresh, min_prominence, save=None):
+    
+    fig, axes = plt.subplots()
+
+    mad = MAD(AnalogSignal).magnitude
+
+    # spike detect
+    mad_thresh = 2
+    st_pos = spike_detect(AnalogSignal, mad * mad_thresh, min_prominence, mode="positive", lowpass_freq=10*pq.kHz)
+    st_neg = spike_detect(AnalogSignal, mad * mad_thresh, min_prominence, mode="negative", lowpass_freq=10*pq.kHz)
+
+    pos_peaks = st_pos.annotations['waveform'].flatten().magnitude
+    neg_peaks = st_neg.annotations['waveform'].flatten().magnitude
+    
+    bins = np.linspace(neg_peaks.max() * -1, pos_peaks.max(), 100)
+
+    axes.hist(pos_peaks, bins=bins, alpha=0.5)
+    axes.hist(neg_peaks*-1 ,bins=bins, alpha=0.5)
+
+    for th in [3, 4, 5, 6]:
+        axes.axvline(mad * th, color='r', lw=0.5, alpha=1)
+
+    for th in [3, 4, 5, 6]:
+        axes.axvline(mad * th * -1, color='r', lw=0.5, alpha=1)
+
+    sns.despine(fig)
+    fig.tight_layout()
 
     if save is not None:
         fig.savefig(save)
