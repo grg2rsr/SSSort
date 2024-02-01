@@ -154,16 +154,15 @@ if spike_detect_only:
     plt.ion()
     plot_spike_detect(AnalogSignal, min_prominence, thres = mad_thresh*global_mad, N=5, w=2 * pq.s)
     plt.ioff()
-    
+   
+
+peak_mode = Config.get('spike detect', 'peak_mode')
+
 for i, seg in enumerate(Blk.segments):
     AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
 
-    # inverting
-    if Config.get('spike detect', 'peak_mode') == 'negative':
-        AnalogSignal *= -1
-
     # spike detection
-    st = spike_detect(AnalogSignal, global_mad * mad_thresh, min_prominence)
+    st = spike_detect(AnalogSignal, global_mad * mad_thresh, min_prominence, mode=peak_mode, lowpass_freq=5*pq.kHz)
     st.annotate(kind='all_spikes')
 
     if len(st) == 0:
@@ -197,8 +196,17 @@ for i, seg in enumerate(Blk.segments):
 n_spikes = np.sum([seg.spiketrains[0].shape[0] for seg in Blk.segments])
 logger.info("total number of detected spikes: %i" % n_spikes)
 
+if spike_detect_only:
+
 # if only spike detection: diagnostic plot and and quit
 if spike_detect_only:
+    j = np.random.randint(len(Blk.segments))
+    seg = Blk.segments[j]  # select a segment at random
+    AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
+    plt.ion()
+    mpl.rcParams['figure.dpi'] = 166 # FIXME Config.get('output', 'fig_dpi')
+    plot_spike_detect_hist(AnalogSignal, mad_thresh, min_prominence)
+    # plot_spike_detect(AnalogSignal, min_prominence, N=5, w=0.35 * pq.s)
     logger.info("only spike detection - press enter to quit")
     input()  # halt terminal here
     sys.exit()
@@ -426,6 +434,9 @@ for it in range(1, n_max_iter):
         outpath = plots_folder / (seg_name + '_fitted_spikes_' + str(it) + fig_format)
         plot_fitted_spikes_pp(Seg, Models, SpikeInfo, this_unit_col, zoom=zoom, save=outpath)
 
+    # TODO docme
+    break_flag = False
+
     if check_convergence(SpikeInfo, it, n_hist, conv_crit):  # refactor conv_crit into 'tol'
 
         logger.info("convergence criterion reached")
@@ -445,14 +456,19 @@ for it in range(1, n_max_iter):
                 # an min numer is not reached yet
                 if clust_alpha > max_alpha:
                     logger.critical("no more good merges, quitting before reaching number of desired clusters")
+                    break_flag = True
                     break
+        if break_flag:
+            break
 
         if len(merge) > 0:
-            # do_merge(merge)
             if not manual_merge:
                 logger.info("automatic merge: %s with %s" % tuple(merge))
                 ix = SpikeInfo.groupby(this_unit_col).get_group(merge[1])['id']
                 SpikeInfo.loc[ix, this_unit_col] = merge[0]
+                # reset alpha
+                clust_alpha = Config.getfloat('spike sort', 'clust_alpha')
+
             else:
                 # show plots for this merge
                 units = get_units(SpikeInfo, this_unit_col)
@@ -461,8 +477,8 @@ for it in range(1, n_max_iter):
                     if k not in [str(m) for m in merge]:
                         colors[k] = 'gray'
                 plt.ion()
+                mpl.rcParams['figure.dpi'] = 166 # fixme Config.get('output', 'sceen_dpi')
                 fig, axes = plot_clustering(Waveforms, SpikeInfo, this_unit_col, colors=colors)
-                # fig, axes = plot_clustering(Waveforms, SpikeInfo, unit_column, color_by=None, n_components=4, N=300, save=None, colors=None, unit_order=None)
                 fig, axes = plot_compare_waveforms(Waveforms, SpikeInfo, this_unit_col, dt, merge)
 
                 # ask for user input
@@ -470,12 +486,14 @@ for it in range(1, n_max_iter):
                     # the merge
                     ix = SpikeInfo.groupby(this_unit_col).get_group(merge[1])['id']
                     SpikeInfo.loc[ix, this_unit_col] = merge[0]
+                    clust_alpha = Config.getfloat('spike sort', 'clust_alpha')
                     logger.info("manually accepted merge: %s with %s" % tuple(merge))
                 else:
                     # if no, add merge to the list of forbidden merges
                     rejected_merges.append(merge)
                     logger.info("manually rejected merge: %s with %s" % tuple(merge))
 
+                mpl.rcParams['figure.dpi'] = Config.get('output', 'fig_dpi')
                 plt.close('all')
                 plt.ioff()
 
@@ -514,7 +532,7 @@ Models = train_Models(SpikeInfo, last_unit_col, Waveforms, n_comp=n_model_comp)
 outpath = plots_folder / ("Models_final%s" % fig_format)
 plot_Models(Models, save=outpath)
 
-# final scoring and assingment
+# final scoring and assignment
 Scores, units = Score_spikes(Waveforms, SpikeInfo, last_unit_col, Models, score_metric=Rss,
                              reassign_penalty=reassign_penalty, noise_penalty=noise_penalty)
 

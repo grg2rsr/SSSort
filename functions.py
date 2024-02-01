@@ -158,13 +158,16 @@ def MAD(AnalogSignal, keep_units=True):
     return mad
 
 
-def spike_detect(AnalogSignal, min_height, min_prominence=None, lowpass_freq=1000 * pq.Hz):
+def spike_detect(AnalogSignal, min_height, min_prominence=None, mode="positive", lowpass_freq=1000*pq.Hz):
 
     if lowpass_freq is not None:
         asig = ele.signal_processing.butter(AnalogSignal, lowpass_freq=lowpass_freq)
         data = asig.magnitude.flatten()
     else:
         data = AnalogSignal.magnitude.flatten()
+
+    if mode == "negative":
+        data = data * -1
 
     if min_prominence is not None:
         prominence = [min_prominence, np.inf]
@@ -241,7 +244,13 @@ def reject_spikes(Waveforms, SpikeInfo, unit_column, n_neighbors=80, verbose=Fal
     spike_labels = SpikeInfo[unit_column]
     for unit in units:
         ix = np.where(spike_labels == unit)[0]
-        a = outlier_reject(Waveforms[:, ix], n_neighbors)
+        try:
+            a = outlier_reject(Waveforms[:, ix], n_neighbors)
+        except ValueError:
+            # raised when n_neighbors <= n_samples
+            # set all bad
+            a = np.ones(ix.shape[0]).astype('bool')
+
         b = peak_reject(Waveforms[:, ix])
         good_inds_unit = ~np.logical_or(a, b)
 
@@ -594,16 +603,18 @@ def best_merge(Avgs, Sds, units, alpha=1, exclude=[]):
     for i in range(Avgs.shape[0]):
         Q[i, i] = Avgs[i, i] + alpha * Sds[i, i]
 
+    if len(exclude) > 0:
+        for exclude_pair in exclude:
+            # new code
+            i, j = [units.index(e) for e in exclude_pair]
+            Q[i,j] = np.inf
+            Q[j,i] = np.inf
+
     merge_candidates = list(zip(np.arange(Q.shape[0]), np.argmin(Q, 1)))
     for i in range(Q.shape[0]):
         if (i, i) in merge_candidates:
             merge_candidates.remove((i, i))
 
-    if len(exclude) > 0:
-        for exclude_pair in exclude:
-            pair = tuple([units.index(e) for e in exclude_pair])
-            if pair in merge_candidates:
-                merge_candidates.remove(pair)
 
     if len(merge_candidates) > 0:
         min_ix = np.argmin([Q[c] for c in merge_candidates])
