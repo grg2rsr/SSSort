@@ -26,7 +26,7 @@ def get_colors(units, palette='hls', desat=None, keep=True):
     else:
         n_colors = len(units)
     colors = sns.color_palette(palette, n_colors=n_colors, desat=desat)
-    # unit_ids = np.arange(n_colors).astype('U')
+
     D = dict(zip(units, colors))
     D['-1'] = (0.5, 0.5, 0.5)
     return D
@@ -229,7 +229,10 @@ def plot_segment(Seg, units, sigma=0.05, zscore=False, save=None, colors=None):
     axes[0].set_yticklabels(units)
     axes[1].set_ylabel('firing rate (Hz)')
     axes[1].set_xlabel('time (s)')
-    title = Path(Seg.annotations['filename']).stem
+    try:
+        title = Path(Seg.annotations['filename']).stem
+    except:
+        title = 'Segment %s'%(Seg.name)
     fig.suptitle(title)
     fig.tight_layout()
     fig.subplots_adjust(top=0.9)
@@ -242,7 +245,7 @@ def plot_segment(Seg, units, sigma=0.05, zscore=False, save=None, colors=None):
     return fig, axes
 
 
-def plot_fitted_spikes(Segment, j, Models, SpikeInfo, unit_column, unit_order=None, zoom=None, save=None, colors=None):
+def plot_fitted_spikes(Segment, j, Models, SpikeInfo, unit_column, wsize, unit_order=None, zoom=None, save=None, colors=None):
     """ plot to inspect fitted spikes """
     fig, axes = plt.subplots(nrows=2, sharex=True, sharey=True)
 
@@ -260,14 +263,14 @@ def plot_fitted_spikes(Segment, j, Models, SpikeInfo, unit_column, unit_order=No
 
     fs = asig.sampling_rate
 
+    # Transform ms in points
+    wsize = (wsize * fs).simplified.magnitude.astype('int32')   
+
     for u, unit in enumerate(units):
         St, = select_by_dict(Segment.spiketrains, unit=unit)
 
         asig_recons = np.zeros(asig.shape[0])
         asig_recons[:] = np.nan
-
-        wsize = 4 * pq.ms  # HARDCODE!
-        wsize = (wsize * fs).simplified.magnitude.astype('int32')  # HARDCODE
 
         inds = (St.times * fs).simplified.magnitude.astype('int32')
         offset = (St.t_start * fs).simplified.magnitude.astype('int32')
@@ -289,7 +292,10 @@ def plot_fitted_spikes(Segment, j, Models, SpikeInfo, unit_column, unit_order=No
         for ax in axes:
             ax.set_xlim(zoom)
 
-    stim_name = Path(Segment.annotations['filename']).stem
+    try:
+        stim_name = Path(Segment.annotations['filename']).stem
+    except:
+        stim_name = 'Segment %s'%(Segment.name)
     fig.suptitle(stim_name)
     fig.tight_layout()
     fig.subplots_adjust(top=0.9)
@@ -395,6 +401,7 @@ def plot_clustering(Waveforms, SpikeInfo, unit_column, color_by=None, n_componen
 
     return fig, axes
 
+  
 def plot_spike_detect_hist(AnalogSignal, mad_thresh, min_prominence, save=None):
     
     fig, axes = plt.subplots()
@@ -431,44 +438,120 @@ def plot_spike_detect_hist(AnalogSignal, mad_thresh, min_prominence, save=None):
 
 
 def plot_spike_detect(AnalogSignal, min_prominence=3, N=4, w=0.2 * pq.s, save=None):
+
     """ """
     fig, axes = plt.subplots(nrows=N, sharey=True)
 
     mad = MAD(AnalogSignal)
 
+    # TODO: fix unefficient ?
+    max_ampl = np.max(AnalogSignal).item()
+
     for i in range(N):
         t_start = np.random.rand() * AnalogSignal.times[-1] - w
+
+        # avoid negative values
+        t_start = t_start*0 if t_start < 0 else t_start
         t_stop = t_start + w
 
         asig = AnalogSignal.time_slice(t_start, t_stop)
-        axes[i].plot(asig.times, asig, color='k', lw=1)
+        axes[i].plot(asig.times, asig, color='k', lw=1, alpha=0.7)
         axes[i].set_xticks([])
-
-        for th in [3, 4, 5]:
-            axes[i].axhline(mad * th, color='r', lw=0.5, alpha=1)
-            st = spike_detect(asig, mad.magnitude * th, min_prominence=min_prominence, lowpass_freq=None)
-            for t in st.times:
-                axes[i].plot([t, t], [0, 10], color='r', lw=th / 5, alpha=1, zorder=1)
-
-        nasig = neo.AnalogSignal(asig.magnitude * -1, units=asig.units, t_start=asig.t_start, sampling_rate=asig.sampling_rate)
-        for th in [3, 4, 5]:
-            axes[i].axhline(mad * -th, color='r', lw=0.5, alpha=1)
-            st = spike_detect(nasig, mad.magnitude * th, min_prominence)
-            for t in st.times:
-                axes[i].plot([t, t], [-10, 0], color='r', lw=th / 5, alpha=1, zorder=1)
+        axes[i].plot(asig.times,np.ones(asig.times.shape)*thres,linewidth=0.5, label='amplitude')
+        axes[i].plot(asig.times,np.ones(asig.times.shape)*min_prominence,linewidth=0.5, color='red', label='min_prominence')
 
     for ax in axes:
-        ax.set_ylim(-5, 5)  # if zscored
+        # ax.set_ylim(-5, 5)  # if zscored
+        ax.set_ylim(-max_ampl, max_ampl)
+
         ax.axhline(0, color='gray', lw=0.5, alpha=1, zorder=-1)
 
     sns.despine(fig, bottom=True)
     fig.tight_layout()
+    plt.legend()
 
     if save is not None:
         fig.savefig(save)
         plt.close(fig)
 
     return fig, axes
+
+
+#TODO reduce complexity and combine to plot_compare spike events
+def plot_spike_events(Segment, thres, min_prominence, wsize=4,max_window=1,max_row=5,save=None,save_format='.png',show=False,st=None,rejs=None):
+    plt.rcParams.update({'font.size': 5})
+    for asig in Segment.analogsignals:  
+        max_window = int(max_window*asig.sampling_rate) #FIX conversion from secs to points
+
+        asig=asig.reshape(asig.shape[0])
+        asig_max= np.amax(asig)
+        asig_min= np.amin(asig)
+        n_rows = asig.shape[0]//max_window #compute number of rows needed to plot complete signal
+        n_plots = n_rows//max_row+ int(not(n_rows/max_row).is_integer())
+
+        #Plot max_row rows per window, plots n_plots to plot the complete signal
+        for i_fig in range(0,n_plots):
+            fig, axes = plt.subplots(nrows=max_row,sharey=True)
+
+            for idx in range(0,max_row): #plot the max_row axes.
+                #plot analog signal
+                ini = i_fig*max_window*max_row+idx * max_window
+                end = i_fig*max_window*max_row+idx * max_window+max_window
+                
+                end = min(end,asig.data.shape[0])-1
+                if ini >= asig.data.shape[0]:
+                    break
+
+                # Convert memory view to NumPy array
+                data_array = np.array(asig.data)
+                # Convert quantity to NumPy array
+                times_array = asig.times.magnitude
+
+                axes[idx].plot(times_array[ini:end],data_array[ini:end],linewidth=1,color='k')
+                
+                if st is None:
+                    st = Segment.spiketrains[0] #get spike trains (assuming there's only one spike train)
+
+                t_ini = asig.times[ini]; t_end = asig.times[end]
+                #get events in this chunk
+                t_events = st.times[np.where((st.times > t_ini) & (st.times < t_end))]
+
+                # TODO: fix unefficient ?
+                max_ampl = np.max(asig.data[ini:end]).item()
+                a_events = np.ones(t_events.shape) * max_ampl
+
+                if rejs is not None:
+                    chunk_r = rejs[np.where((rejs > t_ini) & (rejs < t_end))]
+                    axes[idx].plot(chunk_r,asig_max*np.ones(chunk_r.shape),'|',markersize=5,color='r',label='rejected_spikes')
+
+
+                axes[idx].plot(t_events,a_events,'|',markersize=5,label='detected_spikes',c=[ 0.5, 1.0, 0.5])
+                axes[idx].plot(asig.times[ini:end],np.ones(asig.times[ini:end].shape)*thres,linewidth=0.5, label='amplitude')
+                axes[idx].plot(asig.times[ini:end],np.ones(asig.times[ini:end].shape)*min_prominence,linewidth=0.5, color='darkgreen', label='min_prominence')
+                # axes[idx].set_ylim(asig_min*1.1,asig_max*1.1)
+            if idx ==0:
+                break
+
+            #set plot info:
+            fig.suptitle("Spike Detection (%d/%d)"%(i_fig+1,n_plots))
+            axes[idx].set_xlabel("Time (%s)"%str(asig.times.units).split()[-1])
+            v_unit = str(asig.units).split()[-1]
+            if v_unit == 'dimensionless':
+                v_unit = 'V'
+            axes[idx//2].set_ylabel("Voltage (%s)"%v_unit)
+
+            plt.tight_layout()
+            plt.legend()
+
+            if save is not None:
+                fig.savefig(str(save)+"_%d"%i_fig+save_format)
+
+            if show:
+                plt.show()
+            else:
+                plt.close(fig)
+
+    # return fig, axes
 
 
 """
@@ -508,7 +591,7 @@ def plot_spike_labels(ax, SpikeInfo, spike_label_interval):
         for x, y, s in zip(xpo, ypo, lbl):
             ax.text(x, y, str(s), ha='center', fontsize=4)
 
-
+# TODO: change wsize by config param + transform
 def plot_by_unit(ax, st, asig, Models, SpikeInfo, unit_column, unit_order=None, colors=None, wsize=40):
     try:
         left = wsize[0]
@@ -593,8 +676,10 @@ def plot_fitted_spikes_pp(Segment, Models, SpikeInfo, unit_column, unit_order=No
 
     # axes[0].plot(asig.times[left:right], asig.data[left:right], color='k', lw=0.5)
     # axes[1].plot(asig.times[left:right], asig.data[left:right], color='k', lw=0.5)
-    axes[0].plot(asig.times, asig.data, color='k', lw=0.5)
-    axes[1].plot(asig.times, asig.data, color='k', lw=0.5)
+    times = np.array(asig.times)
+    data = np.array(asig.data)
+    axes[0].plot(times, data, color='k', lw=0.5)
+    axes[1].plot(times, data, color='k', lw=0.5)
 
     if zoom is not None:
         for ax in axes:
@@ -648,10 +733,10 @@ def plot_fitted_spikes_complete(seg, Models, SpikeInfo, unit_column, max_window,
         if rejs is None:
             rejs = SpikeInfo["time"][SpikeInfo[unit_column] == '-2']
 
-        plot_function(seg, Models, SpikeInfo, unit_column, zoom=zoom, save=outpath, wsize=wsize, rejs=rejs, spike_label_interval=spike_label_interval)
+        plot_function(seg, Models, SpikeInfo, unit_column, zoom=zoom, save=outpath, wsize=wsize, rejs=rejs, spike_label_interval=spike_label_interval, colors=colors)
 
 
-def plot_means(means, units, waveform_a, waveform_b, asigs, outpath=None, show=False, colors=None):
+def plot_means(means, units, template_a, template_b, asigs, outpath=None, show=False, colors=None):
     fig, axes = plt.subplots(ncols=len(units), figsize=[len(units) * 3, 4])
 
     if colors is None:
@@ -660,8 +745,8 @@ def plot_means(means, units, waveform_a, waveform_b, asigs, outpath=None, show=F
     for i, (mean, unit) in enumerate(zip(means, units)):
         axes[i].plot(mean, label=unit, color='k', linewidth=0.7)
         axes[i].plot(mean, color=colors[asigs[unit]], alpha=0.3, linewidth=5)
-        axes[i].plot(waveform_a, label="A", color=colors['A'], linewidth=0.7)
-        axes[i].plot(waveform_b, label="B", color=colors['B'], linewidth=0.7)
+        axes[i].plot(template_a, label="A", color=colors['A'], linewidth=0.7)
+        axes[i].plot(template_b, label="B", color=colors['B'], linewidth=0.7)
         axes[i].legend()
 
     plt.tight_layout()
