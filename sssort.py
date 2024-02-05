@@ -168,7 +168,8 @@ for i, seg in enumerate(Blk.segments):
     AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
 
     # spike detection
-    st = spike_detect(AnalogSignal, global_mad * mad_thresh, min_prominence, mode=peak_mode, lowpass_freq=4*pq.kHz)
+    f_filt = (fs-1*pq.Hz)/2 # just below nyquist
+    st = spike_detect(AnalogSignal, global_mad * mad_thresh, min_prominence, mode=peak_mode, lowpass_freq=f_filt)
     st.annotate(kind='all_spikes')
 
     if len(st) == 0:
