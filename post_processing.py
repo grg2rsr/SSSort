@@ -89,7 +89,8 @@ os.makedirs(checked_folder, exist_ok=True)
 os.makedirs(fitted_folder, exist_ok=True)
 
 # create and config logger for writing to file
-sssio.get_logger(exp_name)
+log_path = config_path.parent / exp_name / ("%s.log" % exp_name)
+sssio.get_logger(filename=log_path)
 
 # plot config
 # plotting_changes = Config.getboolean('postprocessing','plot_changes')

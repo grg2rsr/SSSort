@@ -68,7 +68,8 @@ os.makedirs(fitted_folder, exist_ok=True)
 
 os.chdir(config_path.parent / exp_name)
 
-logger = sssio.get_logger(exp_name)
+log_path = config_path.parent / exp_name / ("%s.log" % exp_name)
+logger = sssio.create_logger(filename=log_path)
 
 logger.info('config file read from %s' % config_path)
 
@@ -77,6 +78,10 @@ shutil.copyfile(config_path, config_path.parent / exp_name / config_path.name)
 
 # read data
 Blk = sssio.get_data(data_path)
+for seg in Blk.segments:
+    if not 'filename' in seg.annotations:
+        logger.critical("segment metadata incomplete, filename missing")
+        sys.exit()
 Blk.name = exp_name
 logger.info('data read from %s' % data_path)
 
@@ -163,11 +168,11 @@ for i, seg in enumerate(Blk.segments):
     AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
 
     # spike detection
-    st = spike_detect(AnalogSignal, global_mad * mad_thresh, min_prominence, mode=peak_mode, lowpass_freq=5*pq.kHz)
+    st = spike_detect(AnalogSignal, global_mad * mad_thresh, min_prominence, mode=peak_mode, lowpass_freq=4*pq.kHz)
     st.annotate(kind='all_spikes')
 
     if len(st) == 0:
-        logger.error("No spikes detected, please enter check the threshold values in the configuration file")
+        logger.critical("No spikes detected, please enter check the threshold values in the configuration file")
         exit()
 
     # remove border spikes
@@ -196,8 +201,6 @@ for i, seg in enumerate(Blk.segments):
 
 n_spikes = np.sum([seg.spiketrains[0].shape[0] for seg in Blk.segments])
 logger.info("total number of detected spikes: %i" % n_spikes)
-
-if spike_detect_only:
 
 # if only spike detection: diagnostic plot and and quit
 if spike_detect_only:
@@ -475,7 +478,7 @@ for it in range(1, n_max_iter):
                     if k not in [str(m) for m in merge]:
                         colors[k] = 'gray'
                 plt.ion()
-                mpl.rcParams['figure.dpi'] = Config.get('output', 'sceen_dpi')
+                mpl.rcParams['figure.dpi'] = Config.get('output', 'screen_dpi')
                 fig, axes = plot_clustering(Waveforms, SpikeInfo, this_unit_col, colors=colors)
                 fig, axes = plot_compare_waveforms(Waveforms, SpikeInfo, this_unit_col, dt, merge)
 

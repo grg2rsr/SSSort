@@ -21,18 +21,24 @@ import logging
  
 """
 
-def get_logger(disable=None, exp_name=None):
+def create_logger(filename=None, filemode='w'):
     log_fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
+    # log_fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
     date_fmt = '%Y-%m-%d %H:%M:%S'
     formatter = logging.Formatter(log_fmt, datefmt=date_fmt)
 
-    # for printing to stdout
-    logger = logging.getLogger()  # get all loggers
+    # get all loggers
+    logger = logging.getLogger()
+
+    # scope restrictions
+    # logging.getLogger('matplotlib').setLevel(logging.WARNING)
+    # logging.getLogger('functions').setLevel(logging.INFO)
+    disable = dict(matplotlib=logging.WARNING, functions=logging.INFO) # to be an arg
     if disable is not None:
         for module, level in disable.items():
             logging.getLogger(module).setLevel(level)
-    # logging.getLogger('matplotlib').setLevel(logging.WARNING)
-    # logging.getLogger('functions').setLevel(logging.INFO)
+    
+    # for printing to stdout
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(formatter)
     logger.addHandler(stream_handler)
@@ -41,10 +47,17 @@ def get_logger(disable=None, exp_name=None):
     sys.excepthook = handle_unhandled_exception
 
     # config logger for writing to file
-    file_handler = logging.FileHandler(filename="%s.log" % exp_name, mode='w')
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+    # file_handler = logging.FileHandler(filename="%s.log" % exp_name, mode='w')
+    if filename is not None:
+        file_handler = logging.FileHandler(filename=filename, mode=filemode)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
 
+    return logger
+
+def get_logger(filename=None):
+    # to return a previously created logger
+    logger = create_logger(filename, filemode='a')
     return logger
 
 # logging unhandled exceptions
@@ -63,8 +76,6 @@ def handle_unhandled_exception(exc_type, exc_value, exc_traceback):
  ##       #### ######## ########    ####  #######  
  
 """
-
-logger = get_logger()
 
 def asc2seg(path):
     """ reads an autospike .asc file into a neo segment """
@@ -108,47 +119,42 @@ def smr2seg(path, channel_index=None):
     return segment
 
 
-def list2blk(path):
-    """ convenience function for reading a file containing
-    file paths to recordings per line into a neo block """
+# def list2blk(path):
+#     """ convenience function for reading a file containing
+#     file paths to recordings per line into a neo block """
 
-    with open(path, 'r') as fH:
-        fnames = [line.strip() for line in fH.readlines()]
+#     with open(path, 'r') as fH:
+#         fnames = [line.strip() for line in fH.readlines()]
 
-    Segments = []
-    for fname in fnames:
-        logger.info("reading file %s" % fname, log=False)
-        fmt = os.path.splitext(fname)[1].lower()
-        if fmt == '.asc':
-            segment = asc2seg(fname)
+#     Segments = []
+#     for fname in fnames:
+#         # logger.info("reading file %s" % fname, log=False)
+#         fmt = os.path.splitext(fname)[1].lower()
+#         if fmt == '.asc':
+#             segment = asc2seg(fname)
 
-        if fmt == '.raw':
-            segment = raw2seg(fname)
+#         if fmt == '.raw':
+#             segment = raw2seg(fname)
 
-        if fmt == '.smr':
-            segment = smr2seg(fname)
+#         if fmt == '.smr':
+#             segment = smr2seg(fname)
 
-        Segments.append(segment)
+#         Segments.append(segment)
 
-    Blk = neo.core.Block()
-    Blk.segments = Segments
+#     Blk = neo.core.Block()
+#     Blk.segments = Segments
 
-    return Blk
+#     return Blk
 
 def dill2blk(path):
     with open(path, 'rb') as fH:
-        logger.info("reading neo.block from %s" % path)
         Blk = dill.load(fH)
-        for seg in Blk.segments:
-            if not hasattr(seg.annotations, 'filename'):
-                logger.critical("segment metadata incomplete, filename missing")
     return Blk
 
 
 def blk2dill(Blk, path):
     """ dumps a block via dill"""
     with open(path, 'wb') as fH:
-        logger.info("writing neo.block to %s" % path)
         dill.dump(Blk, fH)
 
 
@@ -167,10 +173,8 @@ def save_data(Blk, path):
 if __name__ == '__main__':
     """ for command line usage - first argument being path to list file """
     path = Path(sys.argv[1])
-    seg = smr2seg(path, index=1)
-    seg.annotate(filename=str(path))
+    seg = smr2seg(path, channel_index=0)
     Blk = neo.core.Block()
     Blk.segments = [seg]
     blk2dill(Blk, path.with_suffix('.dill'))
-    # Blk = list2blk(path)
 
