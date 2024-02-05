@@ -8,8 +8,63 @@ import neo
 import quantities as pq
 
 import logging
-logger = logging.getLogger()
 
+"""
+ 
+ ##        #######   ######    ######   #### ##    ##  ######   
+ ##       ##     ## ##    ##  ##    ##   ##  ###   ## ##    ##  
+ ##       ##     ## ##        ##         ##  ####  ## ##        
+ ##       ##     ## ##   #### ##   ####  ##  ## ## ## ##   #### 
+ ##       ##     ## ##    ##  ##    ##   ##  ##  #### ##    ##  
+ ##       ##     ## ##    ##  ##    ##   ##  ##   ### ##    ##  
+ ########  #######   ######    ######   #### ##    ##  ######   
+ 
+"""
+
+def get_logger(disable=None, exp_name=None):
+    log_fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
+    date_fmt = '%Y-%m-%d %H:%M:%S'
+    formatter = logging.Formatter(log_fmt, datefmt=date_fmt)
+
+    # for printing to stdout
+    logger = logging.getLogger()  # get all loggers
+    if disable is not None:
+        for module, level in disable.items():
+            logging.getLogger(module).setLevel(level)
+    # logging.getLogger('matplotlib').setLevel(logging.WARNING)
+    # logging.getLogger('functions').setLevel(logging.INFO)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    logger.addHandler(stream_handler)
+    logger.setLevel(logging.INFO) # <- this needs to be set as a default argument
+    
+    sys.excepthook = handle_unhandled_exception
+
+    # config logger for writing to file
+    file_handler = logging.FileHandler(filename="%s.log" % exp_name, mode='w')
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    return logger
+
+# logging unhandled exceptions
+def handle_unhandled_exception(exc_type, exc_value, exc_traceback):
+    # TODO make this cleaner that it doesn't use global namespace
+    logging.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+"""
+ 
+ ######## #### ##       ########    ####  #######  
+ ##        ##  ##       ##           ##  ##     ## 
+ ##        ##  ##       ##           ##  ##     ## 
+ ######    ##  ##       ######       ##  ##     ## 
+ ##        ##  ##       ##           ##  ##     ## 
+ ##        ##  ##       ##           ##  ##     ## 
+ ##       #### ######## ########    ####  #######  
+ 
+"""
+
+logger = get_logger()
 
 def asc2seg(path):
     """ reads an autospike .asc file into a neo segment """
@@ -70,9 +125,6 @@ def list2blk(path):
         if fmt == '.raw':
             segment = raw2seg(fname)
 
-        if fmt == '.dill':
-            segment = dill2seg(fname)
-
         if fmt == '.smr':
             segment = smr2seg(fname)
 
@@ -83,26 +135,13 @@ def list2blk(path):
 
     return Blk
 
-
-def seg2dill(Seg, path):
-    """ dumps a seg via dill"""
-    with open(path, 'wb') as fH:
-        logger.info("writing neo.segment to %s" % path)
-        dill.dump(Seg, fH)
-
-
-def dill2seg(path):
-    """ dumps a seg via dill"""
-    with open(path, 'rb') as fH:
-        logger.info("reading neo.segment from %s" % path)
-        Seg = dill.load(fH)
-    return Seg
-
-
 def dill2blk(path):
     with open(path, 'rb') as fH:
         logger.info("reading neo.block from %s" % path)
         Blk = dill.load(fH)
+        for seg in Blk.segments:
+            if not hasattr(seg.annotations, 'filename'):
+                logger.critical("segment metadata incomplete, filename missing")
     return Blk
 
 
@@ -117,46 +156,13 @@ def get_data(path):
     """ reads data at path """
     ext = os.path.splitext(path)[1]
     if ext == '.dill':
-        with open(path, 'rb') as fH:
-            Blk = dill.load(fH)
-    return Blk
-
+        return dill2blk(path)
 
 def save_data(Blk, path):
     """ saves data to path """
     ext = os.path.splitext(path)[1]
     if ext == '.dill':
         blk2dill(Blk, path)
-
-def get_logger(exp_name):
-    log_fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
-    date_fmt = '%Y-%m-%d %H:%M:%S'
-    formatter = logging.Formatter(log_fmt, datefmt=date_fmt)
-
-    # for printing to stdout
-    logger = logging.getLogger()  # get all loggers
-    logging.getLogger('matplotlib').setLevel(logging.WARNING)
-    logging.getLogger('functions').setLevel(logging.INFO)
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(formatter)
-    logger.addHandler(stream_handler)
-    logger.setLevel(logging.INFO)
-    
-    sys.excepthook = handle_unhandled_exception
-
-    # config logger for writing to file
-    file_handler = logging.FileHandler(filename="%s.log" % exp_name, mode='w')
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-
-    return logger
-
-# logging unhandled exceptions
-def handle_unhandled_exception(exc_type, exc_value, exc_traceback):
-    # TODO make this cleaner that it doesn't use global namespace
-    logging.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback))
-
-
 
 if __name__ == '__main__':
     """ for command line usage - first argument being path to list file """

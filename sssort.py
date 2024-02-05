@@ -141,6 +141,7 @@ wsize = Config.getfloat('spike detect', 'wsize') * pq.ms
 spike_detect_only = Config.getboolean('spike detect', 'spike_detect_only')
 extense_plot = Config.getboolean('spike sort', 'plot_fitted_spikes_extense')
 
+# TODO general printing of used parameters in log. They are logged anyways, but still
 logger.info("min_theshold_scale was %f, global_mad is %f, used mad is: %f"%(mad_thresh, global_mad, mad_thresh*global_mad))
 logger.info("min_prominence was %f, global_mad is %f, used min_prominence is: %f"%(min_prominence, global_mad, min_prominence*global_mad))
 
@@ -203,8 +204,9 @@ if spike_detect_only:
     j = np.random.randint(len(Blk.segments))
     seg = Blk.segments[j]  # select a segment at random
     AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
+    
     plt.ion()
-    mpl.rcParams['figure.dpi'] = 166 # FIXME Config.get('output', 'fig_dpi')
+    mpl.rcParams['figure.dpi'] = Config.get('output', 'screen_dpi')
     plot_spike_detect_hist(AnalogSignal, mad_thresh, min_prominence)
     # plot_spike_detect(AnalogSignal, min_prominence, N=5, w=0.35 * pq.s)
     logger.info("only spike detection - press enter to quit")
@@ -426,11 +428,7 @@ for it in range(1, n_max_iter):
     #Plot zoom inspect for current iteration
     zoom = np.array(Config.get('output', 'zoom').split(','), dtype='float32') / 1000
     for j, Seg in enumerate(Blk.segments):
-        try:
-            seg_name = Path(Seg.annotations['filename']).stem
-        except:
-            seg_name = 'Segment %s'%(Seg.name)
-
+        seg_name = Path(Seg.annotations['filename']).stem
         outpath = plots_folder / (seg_name + '_fitted_spikes_' + str(it) + fig_format)
         plot_fitted_spikes_pp(Seg, Models, SpikeInfo, this_unit_col, zoom=zoom, save=outpath)
 
@@ -477,7 +475,7 @@ for it in range(1, n_max_iter):
                     if k not in [str(m) for m in merge]:
                         colors[k] = 'gray'
                 plt.ion()
-                mpl.rcParams['figure.dpi'] = 166 # fixme Config.get('output', 'sceen_dpi')
+                mpl.rcParams['figure.dpi'] = Config.get('output', 'sceen_dpi')
                 fig, axes = plot_clustering(Waveforms, SpikeInfo, this_unit_col, colors=colors)
                 fig, axes = plot_compare_waveforms(Waveforms, SpikeInfo, this_unit_col, dt, merge)
 
@@ -617,10 +615,7 @@ if Config.getboolean('output', 'csv'):
 
     # SpikeTimes
     for i, Seg in enumerate(Blk.segments):
-        try:
-            title = Path(Seg.annotations['filename']).stem
-        except:
-            title = 'Segment %s'%(Seg.name)
+        title = Path(Seg.annotations['filename']).stem
         for j, unit in enumerate(units):
             St, = select_by_dict(Seg.spiketrains, unit=unit)
             outpath = results_folder / ("Segment_%s_unit_%s_spike_times.txt" % (seg_name, unit))
@@ -629,10 +624,7 @@ if Config.getboolean('output', 'csv'):
     # firing rates - full res
     for i, Seg in enumerate(Blk.segments):
         FratesDf = pd.DataFrame()
-        try:
-            title = Path(Seg.annotations['filename']).stem
-        except:
-            title = 'Segment %s'%(Seg.name)
+        title = Path(Seg.annotations['filename']).stem
         for j, unit in enumerate(units):
             asig, = select_by_dict(Seg.analogsignals, kind='frate_fast', unit=unit)
             FratesDf['t'] = asig.times.magnitude
@@ -658,20 +650,14 @@ logger.info("all data is stored")
 logger.info(" - making diagnostic plots - ")
 # plot all sorted spikes
 for j, Seg in enumerate(Blk.segments):
-    try:
-        seg_name = Path(Seg.annotations['filename']).stem
-    except:
-        seg_name = 'Segment %s'%(Seg.name)
+    seg_name = Path(Seg.annotations['filename']).stem
     outpath = plots_folder / (seg_name + '_overview' + fig_format)
     plot_segment(Seg, units, save=outpath)
 
 # plot all sorted spikes
 zoom = np.array(Config.get('output', 'zoom').split(','), dtype='float32') / 1000
 for j, Seg in enumerate(Blk.segments):
-    try:
-        seg_name = Path(Seg.annotations['filename']).stem
-    except:
-        seg_name = 'Segment %s'%(Seg.name)
+    seg_name = Path(Seg.annotations['filename']).stem
     outpath = plots_folder / (seg_name + '_fitted_spikes' + fig_format)
     plot_fitted_spikes(Seg, j, Models, SpikeInfo, final_unit_col, wsize, zoom=zoom, save=outpath)
 
@@ -679,6 +665,7 @@ for j, Seg in enumerate(Blk.segments):
 outpath = plots_folder / (seg_name + '_models_final' + fig_format)
 plot_Models(Models, save=outpath)
 
+# TODO deal with this here too
 if extense_plot:
     logger.info("creating plots")
     units = get_units(SpikeInfo, this_unit_col)
