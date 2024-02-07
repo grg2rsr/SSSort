@@ -401,45 +401,79 @@ def plot_clustering(Waveforms, SpikeInfo, unit_column, color_by=None, n_componen
 
     return fig, axes
 
-  
-def plot_spike_detect_hist(AnalogSignal, mad_thresh, min_prominence, save=None):
-    
-    fig, axes = plt.subplots()
+def plot_spike_detect_inspect(AnalogSignal, min_height, min_prominence, w=2*pq.ms):
+    """ interactive window visualizing: prominence and amplitude for each spike
+    in a scatter plot. Click on scatter point = shows spike shape """
 
-    mad = MAD(AnalogSignal).magnitude
+    mad = MAD(AnalogSignal)
 
-    # spike detect
-    mad_thresh = 2
-    st_pos = spike_detect(AnalogSignal, mad * mad_thresh, min_prominence, mode="positive", lowpass_freq=10*pq.kHz)
-    st_neg = spike_detect(AnalogSignal, mad * mad_thresh, min_prominence, mode="negative", lowpass_freq=10*pq.kHz)
+    st_pos = spike_detect(AnalogSignal, min_height=0, min_prominence=0, mode='positive')
+    st_neg = spike_detect(AnalogSignal, min_height=0, min_prominence=0, mode='negative')
+        
+    fig, axes = plt.subplots(ncols=2, nrows=2)
 
-    pos_peaks = st_pos.annotations['waveform'].flatten().magnitude
-    neg_peaks = st_neg.annotations['waveform'].flatten().magnitude
-    
-    bins = np.linspace(neg_peaks.max() * -1, pos_peaks.max(), 100)
+    # pos
+    peaks = st_pos.annotations['amplitudes'] / mad
+    proms = st_pos.annotations['prominences'] / mad
+    peak_ix_pos = st_pos.annotations['index']
 
-    axes.hist(pos_peaks, bins=bins, alpha=0.5)
-    axes.hist(neg_peaks*-1 ,bins=bins, alpha=0.5)
+    scatter_pos = axes[0,0].scatter(proms, peaks, s=0.25, alpha=0.25, picker=True)
+    axes[0,0].axhline(min_height, color='k', lw=1, linestyle=':')
+    axes[0,0].axvline(min_prominence, color='k', lw=1, linestyle=':')
+    line_pos, = axes[0, 1].plot([], color='k', lw=1)
 
-    for th in [3, 4, 5, 6]:
-        axes.axvline(mad * th, color='r', lw=0.5, alpha=1)
+    a = np.max(peaks) * mad
+    axes[0,1].set_ylim(-a, a)
+    axes[0,1].set_xlim(-w, w)
+    axes[0,1].axhline(0, linestyle=':')
 
-    for th in [3, 4, 5, 6]:
-        axes.axvline(mad * th * -1, color='r', lw=0.5, alpha=1)
+    # neg
+    peaks = st_neg.annotations['amplitudes'] / mad
+    proms = st_neg.annotations['prominences'] / mad
+    peak_ix_neg = st_neg.annotations['index']
 
+    scatter_neg = axes[1,0].scatter(proms, peaks, s=0.25, alpha=0.25, picker=True)
+    axes[1,0].axhline(min_height, color='k', lw=1, linestyle=':')
+    axes[1,0].axvline(min_prominence, color='k', lw=1, linestyle=':')
+    line_neg, = axes[1, 1].plot([], color='k', lw=1)
+
+    a = np.max(peaks) * mad
+    axes[1,1].set_ylim(-a, a)
+    axes[1,1].set_xlim(-w, w)
+    axes[1,1].axhline(0, linestyle=':')
+
+    # deco
+    axes[0,0].set_ylabel('Positive spikes\nAmplitude')
+    axes[1,0].set_ylabel('Negative spikes\nAmplitude')
+    axes[1,0].set_xlabel('Prominence')
+    axes[1,1].set_xlabel('Time (ms)')
+
+    # interative picker
+    def onpick(event):
+        if event.artist  == scatter_pos:
+            ix = event.ind[0]
+            t = AnalogSignal.times[peak_ix_pos[ix]]
+            y = AnalogSignal.time_slice(t-w,t+w).flatten().magnitude
+            x = np.linspace(-w.magnitude,w.magnitude,y.shape[0])
+            line_pos.set_data(x,y)
+
+        if event.artist  == scatter_neg:
+            ix = event.ind[0]
+            t = AnalogSignal.times[peak_ix_neg[ix]]
+            y = AnalogSignal.time_slice(t-w,t+w).flatten().magnitude
+            x = np.linspace(-w.magnitude,w.magnitude,y.shape[0])
+            line_neg.set_data(x,y)
+
+        fig.canvas.draw()
+
+    fig.canvas.mpl_connect('pick_event', onpick)
+    fig.suptitle('Spike detection inspection (left-click on scatter)')
     sns.despine(fig)
-    fig.tight_layout()
-
-    if save is not None:
-        fig.savefig(save)
-        plt.close(fig)
-
-    return fig, axes
 
 
-def plot_spike_detect(AnalogSignal, min_prominence=3, N=4, w=0.2 * pq.s, save=None):
-
+def plot_spike_detect(AnalogSignal, mad_thresh, min_prominence, N=4, w=0.2*pq.s, save=None):
     """ """
+
     fig, axes = plt.subplots(nrows=N, sharey=True)
 
     mad = MAD(AnalogSignal)
@@ -457,7 +491,7 @@ def plot_spike_detect(AnalogSignal, min_prominence=3, N=4, w=0.2 * pq.s, save=No
         asig = AnalogSignal.time_slice(t_start, t_stop)
         axes[i].plot(asig.times, asig, color='k', lw=1, alpha=0.7)
         axes[i].set_xticks([])
-        axes[i].plot(asig.times,np.ones(asig.times.shape)*thres,linewidth=0.5, label='amplitude')
+        axes[i].plot(asig.times,np.ones(asig.times.shape)*thres,linewidth=0.5, label='amplitude') # FIXME this breaks
         axes[i].plot(asig.times,np.ones(asig.times.shape)*min_prominence,linewidth=0.5, color='red', label='min_prominence')
 
     for ax in axes:

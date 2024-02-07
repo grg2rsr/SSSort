@@ -139,53 +139,47 @@ logger.info(' - spike detect - ')
 global_mad = np.average([MAD(seg.analogsignals[0]) for seg in Blk.segments])
 mad_thresh = Config.getfloat('spike detect', 'min_theshold_scale')
 min_prominence = Config.getfloat('spike detect', 'min_prominence_scale')
-if min_prominence == 0:
-    min_prominence = None
 wsize = Config.getfloat('spike detect', 'wsize') * pq.ms
 
 spike_detect_only = Config.getboolean('spike detect', 'spike_detect_only')
 extense_plot = Config.getboolean('spike sort', 'plot_fitted_spikes_extense')
+peak_mode = Config.get('spike detect', 'peak_mode')
 
 # TODO general printing of used parameters in log. They are logged anyways, but still
-logger.info("min_theshold_scale was %f, global_mad is %f, used mad is: %f"%(mad_thresh, global_mad, mad_thresh*global_mad))
-logger.info("min_prominence was %f, global_mad is %f, used min_prominence is: %f"%(min_prominence, global_mad, min_prominence*global_mad))
-
-min_prominence = min_prominence *global_mad
+# logger.info("min_theshold_scale was %f, global_mad is %f, used mad is: %f"%(mad_thresh, global_mad, mad_thresh*global_mad))
+# logger.info("min_prominence was %f, global_mad is %f, used min_prominence is: %f"%(min_prominence, global_mad, min_prominence*global_mad))
 
 # if only spike detection: diagnostic plot and option to continue with spike detection
 if spike_detect_only:
     j = np.random.randint(len(Blk.segments))
     seg = Blk.segments[j]  # select a segment at random
+
     AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
+
     plt.ion()
-    plot_spike_detect(AnalogSignal, min_prominence, thres = mad_thresh*global_mad, N=5, w=2 * pq.s)
+    mpl.rcParams['figure.dpi'] = Config.get('output', 'screen_dpi')
+    plot_spike_detect_inspect(AnalogSignal, mad_thresh, min_prominence)
+    # plot_spike_detect(AnalogSignal, mad_thresh, min_prominence, N=5, w=2*pq.s)
+    logger.info("only spike detection - press enter to quit")
+    input()  # halt terminal here
     plt.ioff()
+    sys.exit()
    
-
-peak_mode = Config.get('spike detect', 'peak_mode')
-
 for i, seg in enumerate(Blk.segments):
     AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
 
     # spike detection
-    f_filt = (fs-1*pq.Hz)/2 # just below nyquist
-    st = spike_detect(AnalogSignal, global_mad * mad_thresh, min_prominence, mode=peak_mode, lowpass_freq=f_filt)
+    st = spike_detect(AnalogSignal, mad_thresh, min_prominence, mode=peak_mode)
     st.annotate(kind='all_spikes')
 
     if len(st) == 0:
-        logger.critical("No spikes detected, please enter check the threshold values in the configuration file")
+        logger.critical("No spikes detected, change the threshold values in the configuration file")
         exit()
 
     # remove border spikes
     st_cut = st.time_slice(st.t_start + wsize / 2, st.t_stop - wsize / 2)
     st_cut.t_start = st.t_start
     seg.spiketrains.append(st_cut)
-   
-        # j = np.random.randint(len(Blk.segments))
-        # seg = Blk.segments[j]  # select a segment at random
-        # AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
-        # plt.ion()
-        # plot_spike_detect(AnalogSignal, min_prominence, N=5, w=0.35 * pq.s)
 
     if extense_plot:
         logger.info("extense plot on, plotting detected spikes...")
@@ -193,29 +187,8 @@ for i, seg in enumerate(Blk.segments):
         namepath = detected_folder / ("spike_detection_%d"%i)
         plot_spike_events(seg, min_prominence=min_prominence, thres=MAD(AnalogSignal)*mad_thresh,save=namepath,save_format=fig_format,max_window=0.4,max_row=3)
  
-
-    # # if only spike detection: diagnostic plot and and quit
-    # if spike_detect_only:
-    #     logger.info("only spike detection - press enter to quit")
-    #     input()  # halt terminal here
-    #     sys.exit()
-
 n_spikes = np.sum([seg.spiketrains[0].shape[0] for seg in Blk.segments])
 logger.info("total number of detected spikes: %i" % n_spikes)
-
-# if only spike detection: diagnostic plot and and quit
-if spike_detect_only:
-    j = np.random.randint(len(Blk.segments))
-    seg = Blk.segments[j]  # select a segment at random
-    AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
-    
-    plt.ion()
-    mpl.rcParams['figure.dpi'] = Config.get('output', 'screen_dpi')
-    plot_spike_detect_hist(AnalogSignal, mad_thresh, min_prominence)
-    # plot_spike_detect(AnalogSignal, min_prominence, N=5, w=0.35 * pq.s)
-    logger.info("only spike detection - press enter to quit")
-    input()  # halt terminal here
-    sys.exit()
 
 """
  
@@ -316,7 +289,7 @@ n_neighbors = Config.getint('spike model', 'template_reject')
 SpikeInfo = reject_spikes(Waveforms, SpikeInfo, 'unit_0', n_neighbors, verbose=True)
 
 # unassign spikes if unit has too little good spikes
-SpikeInfo = reject_unit(SpikeInfo, 'unit_0')
+SpikeInfo = reject_unit(SpikeInfo, 'unit_0', min_good=40)
 
 """
  
@@ -488,6 +461,7 @@ for it in range(1, n_max_iter):
                     # the merge
                     ix = SpikeInfo.groupby(this_unit_col).get_group(merge[1])['id']
                     SpikeInfo.loc[ix, this_unit_col] = merge[0]
+                    # reset alpha
                     clust_alpha = Config.getfloat('spike sort', 'clust_alpha')
                     logger.info("manually accepted merge: %s with %s" % tuple(merge))
                 else:

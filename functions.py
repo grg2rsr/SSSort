@@ -157,36 +157,34 @@ def MAD(AnalogSignal, keep_units=True):
         mad = mad * AnalogSignal.units
     return mad
 
+def spike_detect(AnalogSignal, min_height, min_prominence, mode="positive"):
 
-def spike_detect(AnalogSignal, min_height, min_prominence=None, mode="positive", lowpass_freq=1000*pq.Hz):
-
-    if lowpass_freq is not None:
-        asig = ele.signal_processing.butter(AnalogSignal, lowpass_freq=lowpass_freq)
-        data = asig.magnitude.flatten()
-    else:
-        data = AnalogSignal.magnitude.flatten()
+    data = AnalogSignal.magnitude.flatten()
 
     if mode == "negative":
         data = data * -1
 
-    if min_prominence is not None:
-        prominence = [min_prominence, np.inf]
-    else:
-        prominence = None
+    mad = MAD(AnalogSignal, keep_units=False)
+    min_height = min_height * mad
+    min_prominence = min_prominence * mad
 
-    res = signal.find_peaks(data, height=[min_height, np.inf], prominence=prominence)
+    # peak find
+    res = signal.find_peaks(data, height=[min_height, np.inf], prominence=[min_prominence, np.inf])
+    peak_ix = res[0]
+    peak_amps = data[peak_ix]
+    proms = signal.peak_prominences(data, peak_ix)[0]
 
-    peak_inds = res[0]
-    peak_amps = res[1]['peak_heights'][:, np.newaxis, np.newaxis] * AnalogSignal.units
-
-    SpikeTrain = neo.core.SpikeTrain(AnalogSignal.times[peak_inds],
+    SpikeTrain = neo.core.SpikeTrain(AnalogSignal.times[peak_ix],
                                      t_start=AnalogSignal.t_start,
                                      t_stop=AnalogSignal.t_stop,
-                                     sampling_rate=AnalogSignal.sampling_rate,
-                                     waveform=peak_amps)
+                                     sampling_rate=AnalogSignal.sampling_rate)
+    
+    # adding spike amplitude and prominence to the spiketrain
+    SpikeTrain.annotate(amplitudes=peak_amps * AnalogSignal.units, # in units of the signal, not in multiples of MAD!
+                        prominences=proms * AnalogSignal.units, # in units of the signal, not in multiples of MAD!
+                        index=peak_ix) # index of the peak in the corresponding AnalogSignal
 
     return SpikeTrain
-
 
 """
  
