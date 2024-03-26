@@ -560,7 +560,7 @@ def Score_spikes(Waveforms, SpikeInfo, unit_column, Models, score_metric=Rss,
 """
 
 
-def calculate_pairwise_distances(Waveforms, SpikeInfo, unit_column, n_comp=5):
+def calculate_pairwise_distances(Waveforms, SpikeInfo, unit_column, n_comp=5, use_fr=False, w=1):
     """ calculate all pairwise distances between Waveforms in PC space defined by n_comp.
     returns matrix of average distances and of their sd """
 
@@ -577,13 +577,26 @@ def calculate_pairwise_distances(Waveforms, SpikeInfo, unit_column, n_comp=5):
         for j, unit_b in enumerate(units):
             ix_a = SpikeInfo.groupby([unit_column, 'good']).get_group((unit_a, True))['id']
             ix_b = SpikeInfo.groupby([unit_column, 'good']).get_group((unit_b, True))['id']
+                
             T_a = X[ix_a, :]
             T_b = X[ix_b, :]
+
+            if use_fr:
+                fr_a = SpikeInfo.groupby([unit_column, 'good']).get_group((unit_a, True))['frate_fast']
+                fr_b = SpikeInfo.groupby([unit_column, 'good']).get_group((unit_b, True))['frate_fast']
+
+                T_a = np.concatenate([T_a, w*fr_a[:,np.newaxis]], axis=1)
+                T_b = np.concatenate([T_b, w*fr_b[:,np.newaxis]], axis=1)
+
+                # standardize
+                # T_a = T_a / np.std(T_a, axis=0)[np.newaxis,:]
+                # T_b = T_b / np.std(T_b, axis=0)[np.newaxis,:]
+
             D_pw = metrics.pairwise.euclidean_distances(T_a, T_b)
             Avgs[i, j] = np.average(D_pw)
             Sds[i, j] = np.std(D_pw)
-    return Avgs, Sds
 
+    return Avgs, Sds
 
 def best_merge(Avgs, Sds, units, alpha=1, exclude=[]):
     """

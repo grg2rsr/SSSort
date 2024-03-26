@@ -348,6 +348,9 @@ sorting_noise = Config.getfloat('spike sort', 'f_noise')
 conv_crit = Config.getfloat('spike sort', 'conv_crit')
 n_hist = Config.getint('spike sort', 'history_len')
 
+use_fr = Config.getboolean('spike sort', 'use_fr')
+fr_weight = Config.getfloat('spike sort', 'fr_weight')
+
 # hardcoded parameters
 alpha_incr = 0.05
 max_alpha = 100
@@ -400,7 +403,7 @@ for it in range(1, n_max_iter):
 
     # print iteration info
     n_changes, _ = get_changes(SpikeInfo, this_unit_col)
-    logger.info("Iteration: %i - Error: %.2e - # reassigned spikes: %s" % (it, Rss_sum, n_changes))
+    logger.info("Iteration: %i - Rss: %.2e - # reassigned spikes: %s" % (it, Rss_sum, n_changes))
 
     #Plot zoom inspect for current iteration
     zoom = np.array(Config.get('output', 'zoom').split(','), dtype='float32') / 1000
@@ -418,7 +421,7 @@ for it in range(1, n_max_iter):
 
         # check for merges - if no merge - exit
         logger.info("checking for merges")
-        Avgs, Sds = calculate_pairwise_distances(Waveforms, SpikeInfo, this_unit_col)
+        Avgs, Sds = calculate_pairwise_distances(Waveforms, SpikeInfo, this_unit_col, use_fr=use_fr, w=fr_weight)
         merge = best_merge(Avgs, Sds, units, clust_alpha, exclude=rejected_merges)
 
         if force_merge:  # force merge
@@ -534,7 +537,7 @@ plot_convergence(AICs, save=outpath)
 
 # plot final clustering
 outpath = plots_folder / ("Clustering_all" + fig_format)
-plot_clustering(Waveforms, SpikeInfo, final_unit_col, save=outpath, N=2000)
+plot_clustering(Waveforms, SpikeInfo, final_unit_col, save=outpath, N=100)
 units = get_units(SpikeInfo, final_unit_col)
 for unit in units:
     outpath = plots_folder / ("Clustering_%s%s" % (unit, fig_format))
@@ -542,7 +545,7 @@ for unit in units:
 
 # plotting waveforms
 outpath = plots_folder / ("waveforms_final" + fig_format)
-plot_waveforms(Waveforms, SpikeInfo, dt.rescale(pq.ms).magnitude, this_unit_col, N=100, save=outpath)
+plot_waveforms(Waveforms, SpikeInfo, dt.rescale(pq.ms).magnitude, final_unit_col, N=100, save=outpath)
 
 # update spike labels
 kernel = ele.kernels.GaussianKernel(sigma=kernel_fast * pq.s)
@@ -658,6 +661,5 @@ if extense_plot:
                                 colors=colors)
 
 logger.info("plotting done")
-
 logger.info("all tasks done - quitting")
 sys.exit()
