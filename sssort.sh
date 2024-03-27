@@ -1,6 +1,5 @@
 #!/bin/bash
-source /home/$USER/anaconda3/etc/profile.d/conda.sh
+source /home/$USER/anaconda3/etc/profile.d/conda.sh # TODO to determined by setup.py
 conda activate sssort
-
-# 2do put install install path here
-python /home/georg/code/SSSort/run.py $@
+INSTALL_DIR = XX # to be inserted by setup.py
+python $INSTALL_DIR/run.py $@
