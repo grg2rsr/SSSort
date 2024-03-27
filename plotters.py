@@ -17,7 +17,10 @@ import seaborn as sns
 
 # own
 from functions import *
+from pprint import pprint
+from sssio import get_logger
 
+# logger = get_logger()
 
 def get_colors(units, palette='hls', desat=None, keep=True):
     """ return dict mapping unit labels to colors """
@@ -401,9 +404,11 @@ def plot_clustering(Waveforms, SpikeInfo, unit_column, color_by=None, n_componen
 
     return fig, axes
 
-def plot_spike_detect_inspect(AnalogSignal, min_height, min_prominence, w=2*pq.ms):
+def plot_spike_detect_inspect(AnalogSignal, min_height, min_prominence, Config=None, w=2*pq.ms):
     """ interactive window visualizing: prominence and amplitude for each spike
     in a scatter plot. Click on scatter point = shows spike shape """
+
+    peak_mode = 'positive' # default
 
     mad = MAD(AnalogSignal)
 
@@ -418,8 +423,8 @@ def plot_spike_detect_inspect(AnalogSignal, min_height, min_prominence, w=2*pq.m
     peak_ix_pos = st_pos.annotations['index']
 
     scatter_pos = axes[0,0].scatter(proms, peaks, s=0.25, alpha=0.25, picker=True)
-    axes[0,0].axhline(min_height, color='k', lw=1, linestyle=':')
-    axes[0,0].axvline(min_prominence, color='k', lw=1, linestyle=':')
+    height_line_pos = axes[0,0].axhline(min_height, color='k', lw=1, linestyle=':')
+    prom_line_pos = axes[0,0].axvline(min_prominence, color='k', lw=1, linestyle=':')
     line_pos, = axes[0, 1].plot([], color='k', lw=1)
 
     a = np.max(peaks) * mad
@@ -433,8 +438,8 @@ def plot_spike_detect_inspect(AnalogSignal, min_height, min_prominence, w=2*pq.m
     peak_ix_neg = st_neg.annotations['index']
 
     scatter_neg = axes[1,0].scatter(proms, peaks, s=0.25, alpha=0.25, picker=True)
-    axes[1,0].axhline(min_height, color='k', lw=1, linestyle=':')
-    axes[1,0].axvline(min_prominence, color='k', lw=1, linestyle=':')
+    height_line_neg = axes[1,0].axhline(min_height, color='k', lw=1, linestyle=':')
+    prom_line_neg = axes[1,0].axvline(min_prominence, color='k', lw=1, linestyle=':')
     line_neg, = axes[1, 1].plot([], color='k', lw=1)
 
     a = np.max(peaks) * mad
@@ -450,25 +455,63 @@ def plot_spike_detect_inspect(AnalogSignal, min_height, min_prominence, w=2*pq.m
 
     # interative picker
     def onpick(event):
-        if event.artist  == scatter_pos:
-            ix = event.ind[0]
-            t = AnalogSignal.times[peak_ix_pos[ix]]
-            y = AnalogSignal.time_slice(t-w,t+w).flatten().magnitude
-            x = np.linspace(-w.magnitude,w.magnitude,y.shape[0])
-            line_pos.set_data(x,y)
+        if event.mouseevent.button == 1:
+            if event.artist  == scatter_pos:
+                ix = event.ind[0]
+                t = AnalogSignal.times[peak_ix_pos[ix]]
+                y = AnalogSignal.time_slice(t-w,t+w).flatten().magnitude
+                x = np.linspace(-w.magnitude,w.magnitude,y.shape[0])
+                line_pos.set_data(x,y)
 
-        if event.artist  == scatter_neg:
-            ix = event.ind[0]
-            t = AnalogSignal.times[peak_ix_neg[ix]]
-            y = AnalogSignal.time_slice(t-w,t+w).flatten().magnitude
-            x = np.linspace(-w.magnitude,w.magnitude,y.shape[0])
-            line_neg.set_data(x,y)
+            if event.artist  == scatter_neg:
+                ix = event.ind[0]
+                t = AnalogSignal.times[peak_ix_neg[ix]]
+                y = AnalogSignal.time_slice(t-w,t+w).flatten().magnitude
+                x = np.linspace(-w.magnitude,w.magnitude,y.shape[0])
+                line_neg.set_data(x,y)
 
         fig.canvas.draw()
 
+    def on_press(event):
+        # store and exit
+        if event.key == 'enter':
+            # prep values
+            if peak_mode == 'positive':
+                min_threshold_scale, = height_line_pos.get_ydata()
+                min_prominence, = prom_line_pos.get_xdata()
+            if peak_mode == 'negative':
+                min_threshold_scale, = height_line_neg.get_ydata()
+                min_prominence, = prom_line_neg.get_xdata()
+
+            # set 
+            Config['spike detect']['peak_mode'] = peak_mode
+            Config['spike detect']['min_threshold_scale'] = "%.3f" % min_threshold_scale
+            Config['spike detect']['min_prominence'] = "%.3f" % min_prominence
+
+            logger.info("updating config with values for spike amplitude, prominence, and direction")
+            with open(Config.filepath, 'w') as fH:
+                Config.write(fH)
+            
+    def on_click(event):
+        if event.button == 3:
+            x, y = event.xdata, event.ydata
+            if event.inaxes == axes[0,0]:
+                height_line_pos.set_ydata(y)
+                prom_line_pos.set_xdata(x)
+                peak_mode = 'positive'
+            if event.inaxes == axes[1,0]:
+                height_line_neg.set_ydata(y)
+                prom_line_neg.set_xdata(x)
+                peak_mode = 'negative'
+
+    fig.canvas.mpl_connect('button_press_event', on_click)
     fig.canvas.mpl_connect('pick_event', onpick)
-    fig.suptitle('Spike detection inspection (left-click on scatter)')
+    fig.canvas.mpl_connect('key_press_event', on_press)
+
+    fig.suptitle('left-click on scatter to visualize spike\nenter to store thresholds to config', size='small')
     sns.despine(fig)
+    fig.tight_layout()
+    fig.subplots_adjust(top=0.9)
 
 
 def plot_spike_detect(AnalogSignal, mad_thresh, min_prominence, N=4, w=0.2*pq.s, save=None):
