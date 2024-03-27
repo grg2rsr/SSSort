@@ -16,6 +16,7 @@ import pandas as pd
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.decomposition import PCA
 from sklearn import metrics
+from sklearn import linear_model
 
 # ephys
 import neo
@@ -85,6 +86,7 @@ def get_units(SpikeInfo, unit_column, remove_unassigned=True):
 
 def reject_unit(SpikeInfo, unit_column, min_good=80):
     """ unassign spikes from unit it unit does not contain enough spikes as samples """
+    # TODO make this a fraction
     units = get_units(SpikeInfo, unit_column)
     for unit in units:
         Df = SpikeInfo.groupby(unit_column).get_group(unit)
@@ -286,14 +288,13 @@ class Spike_Model():
     """ models how firing rate influences spike shape. First forms a 
     lower dimensional embedding of spikes in PC space and then fits a 
     linear relationship on how the spikes change in this space. """
-
     def __init__(self, n_comp=5):
         self.n_comp = n_comp
         self.Waveforms = None
         self.frates = None
         pass
 
-    def fit(self, Waveforms, frates):
+    def fit(self, Waveforms, frates, model="RANSAC"):
         """ fits the linear model """
 
         # keep data
@@ -303,12 +304,17 @@ class Spike_Model():
         # make pca from Waveforms
         self.pca = PCA(n_components=self.n_comp)
         self.pca.fit(Waveforms.T)
-        pca_waveforms = self.pca.transform(Waveforms.T)
+        self.Waveforms_pca = self.pca.transform(Waveforms.T)
 
         self.pfits = []
         p0 = [0, 0]
         for i in range(self.n_comp):
-            pfit = stats.linregress(frates, pca_waveforms[:, i])[:2]
+            if model == "RANSAC":
+                LM = linear_model.RANSACRegressor()
+                LM.fit(self.frates.reshape(-1,1), self.Waveforms_pca[:, i])
+                pfit = (LM.estimator_.coef_[0], LM.estimator_.intercept_) # for ransac
+            if model == "linregress":
+                pfit = stats.linregress(self.frates, self.Waveforms_pca[:, i])[:2]
             self.pfits.append(pfit)
 
     def predict(self, fr):
@@ -399,11 +405,9 @@ def train_Models(SpikeInfo, unit_column, Waveforms, n_comp=5, model_type=Spike_M
         # get the corresponding spikes - restrict training to good spikes
         SInfo = SpikeInfo.groupby([unit_column, 'good']).get_group((unit, True))
         # data
-        ix = SInfo['id']
-        ix = np.array(ix.values, dtype='int32')
+        ix = SInfo['id'].values
         T = Waveforms[:, ix]
-        # frates
-        frates = SInfo['frate_fast']
+        frates = SInfo['frate_fast'].values
         # model
         Models[unit] = model_type(n_comp=n_comp)
         Models[unit].fit(T, frates)
