@@ -5,6 +5,7 @@ import shutil
 import dill
 import configparser
 from pathlib import Path
+from pprint import pprint
 
 # sci
 import numpy as np
@@ -25,7 +26,6 @@ from functions import *
 from plotters import *
 import sssio
 
-
 print("This is SSSort v1.0.0")
 print("author: Georg Raiser - grg2rsr@gmail.com")
 
@@ -41,19 +41,16 @@ print("author: Georg Raiser - grg2rsr@gmail.com")
  
 """
 
-# get config
-if len(sys.argv) == 1:
-    config_path = Path("./example_config.ini")
-else:
-    config_path = Path(os.path.abspath(sys.argv[1]))
+config_path = Path(os.path.abspath(sys.argv[1]))
+mode = sys.argv[2]
 
 Config = configparser.ConfigParser()
 Config.read(config_path)
+Config.filepath = config_path
 
 # handling paths and creating output directory
-data_path = Path(Config.get('path', 'data_path'))
+data_path = Path(Config.get('path','data_path'))
 if not data_path.is_absolute():
-    # ToDo when starts by ~ is not absolute.
     data_path = config_path.parent / data_path
 
 exp_name = Config.get('path', 'experiment_name')
@@ -150,7 +147,7 @@ peak_mode = Config.get('spike detect', 'peak_mode')
 # logger.info("min_prominence was %f, global_mad is %f, used min_prominence is: %f"%(min_prominence, global_mad, min_prominence*global_mad))
 
 # if only spike detection: diagnostic plot and option to continue with spike detection
-if spike_detect_only:
+if mode == 'detect':
     j = np.random.randint(len(Blk.segments))
     seg = Blk.segments[j]  # select a segment at random
 
@@ -158,13 +155,13 @@ if spike_detect_only:
 
     plt.ion()
     mpl.rcParams['figure.dpi'] = Config.get('output', 'screen_dpi')
-    plot_spike_detect_inspect(AnalogSignal, mad_thresh, min_prominence)
+    plot_spike_detect_inspect(AnalogSignal, mad_thresh, min_prominence, Config)
     # plot_spike_detect(AnalogSignal, mad_thresh, min_prominence, N=5, w=2*pq.s)
     logger.info("only spike detection - press enter to quit")
     input()  # halt terminal here
     plt.ioff()
     sys.exit()
-   
+
 for i, seg in enumerate(Blk.segments):
     AnalogSignal, = select_by_dict(seg.analogsignals, kind='original')
 
@@ -405,7 +402,7 @@ for it in range(1, n_max_iter):
     n_changes, _ = get_changes(SpikeInfo, this_unit_col)
     logger.info("Iteration: %i - Rss: %.2e - # reassigned spikes: %s" % (it, Rss_sum, n_changes))
 
-    #Plot zoom inspect for current iteration
+    # Plot zoom inspect for current iteration
     zoom = np.array(Config.get('output', 'zoom').split(','), dtype='float32') / 1000
     for j, Seg in enumerate(Blk.segments):
         seg_name = Path(Seg.annotations['filename']).stem
@@ -500,32 +497,32 @@ for it in range(1, n_max_iter):
 
 logger.info(" - finishing up - ")
 
-last_unit_col = [col for col in SpikeInfo.columns if col.startswith('unit')][-1]
-final_unit_col = 'unit_%i' % (int(last_unit_col.split('_')[1]) + 1)
+for i in range(2):
+    last_unit_col = [col for col in SpikeInfo.columns if col.startswith('unit')][-1]
+    final_unit_col = 'unit_%i' % (int(last_unit_col.split('_')[1]) + 1)
 
-# final calculation of frate fast
-calc_update_frates(SpikeInfo, last_unit_col, kernel_fast, kernel_slow)
+    # final calculation of frate fast
+    calc_update_frates(SpikeInfo, last_unit_col, kernel_fast, kernel_slow)
 
-# train final models
-Models = train_Models(SpikeInfo, last_unit_col, Waveforms, n_comp=n_model_comp)
-outpath = plots_folder / ("Models_final%s" % fig_format)
-plot_Models(Models, save=outpath)
+    # train final models
+    Models = train_Models(SpikeInfo, last_unit_col, Waveforms, n_comp=n_model_comp)
+    outpath = plots_folder / ("Models_final%s" % fig_format)
+    plot_Models(Models, save=outpath)
 
-# final scoring and assignment
-Scores, units = Score_spikes(Waveforms, SpikeInfo, last_unit_col, Models, score_metric=Rss,
-                             reassign_penalty=reassign_penalty, noise_penalty=noise_penalty)
+    # final scoring and assignment
+    Scores, units = Score_spikes(Waveforms, SpikeInfo, last_unit_col, Models, score_metric=Rss,
+                                reassign_penalty=reassign_penalty, noise_penalty=noise_penalty)
 
-# assign new labels
-min_ix = np.argmin(Scores, axis=1)
-new_labels = np.array([units[i] for i in min_ix], dtype='U')
-SpikeInfo[final_unit_col] = new_labels
+    # assign new labels
+    min_ix = np.argmin(Scores, axis=1)
+    new_labels = np.array([units[i] for i in min_ix], dtype='U')
+    SpikeInfo[final_unit_col] = new_labels
 
-# clean assignment
-SpikeInfo = reject_unit(SpikeInfo, final_unit_col)
-reject_spikes(Waveforms, SpikeInfo, final_unit_col)
+    # clean assignment
+    SpikeInfo = reject_unit(SpikeInfo, final_unit_col)
+    reject_spikes(Waveforms, SpikeInfo, final_unit_col)
 
 # - algo done -
-
 logger.info(" - saving results - ")
 
 # plot convergence
