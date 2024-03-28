@@ -25,35 +25,6 @@ from functions import *
 from plotters import *
 import sssio
 
-# logging
-import logging
-
-log_fmt = "%(asctime)s - %(levelname)s - %(message)s"
-date_fmt = '%Y-%m-%d %H:%M:%S'
-formatter = logging.Formatter(log_fmt, datefmt=date_fmt)
-
-# for printing to stdout
-logger = logging.getLogger()  # get all loggers
-logging.getLogger('matplotlib').setLevel(logging.WARNING)
-logging.getLogger('functions').setLevel(logging.INFO)
-stream_handler = logging.StreamHandler()
-stream_handler.setFormatter(formatter)
-logger.addHandler(stream_handler)
-logger.setLevel(logging.DEBUG)
-
-# logging unhandled exceptions
-
-
-def handle_unhandled_exception(exc_type, exc_value, exc_traceback):
-    # TODO make this cleaner that it doesn't use global namespace
-    logging.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback))
-
-
-sys.excepthook = handle_unhandled_exception
-
-print("This is SSSort v1.0.0")
-print("author: Georg Raiser - grg2rsr@gmail.com")
-
 """
  
  #### ##    ## #### 
@@ -67,12 +38,13 @@ print("author: Georg Raiser - grg2rsr@gmail.com")
 """
 
 # get config
-if len(sys.argv) == 1:
-    config_path = Path("/home/georg/code/SSSort/example_config.ini")
-if len(sys.argv) == 2:
-    config_path = Path(os.path.abspath(sys.argv[1]))
+config_path = Path(sys.argv[1])
+Config = configparser.ConfigParser()
+Config.read(config_path)
+# print('config file read from %s' % config_path)
+
+# optional extra arg: unit column
 if len(sys.argv) == 3:
-    config_path = Path(os.path.abspath(sys.argv[1]))
     unit_column = sys.argv[2]
 
 Config = configparser.ConfigParser()
@@ -84,21 +56,13 @@ data_path = Path(Config.get('path', 'data_path'))
 #     data_path = config_path.parent / data_path
 
 exp_name = Config.get('path', 'experiment_name')
-results_folder = config_path.parent / 'results'
+results_folder = config_path.parent / exp_name / 'results'
 plots_folder = results_folder / 'plots'
 
-# os.makedirs(plots_folder, exist_ok=True)
-
-# config logger for writing to file
-os.chdir(config_path.parent)
-file_handler = logging.FileHandler(filename="%s.log" % exp_name, mode='a')
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
-
-logger.info('config file read from %s' % config_path)
+logger = sssio.get_logger(config_path.parent / exp_name / (exp_name+'.log'))
+logger.info(" - manual merging - ")
 
 os.chdir(results_folder)
-
 
 """
  
@@ -165,7 +129,7 @@ max_alpha = 1000
 
 rejected_merges = []
 
-n_clust = len(get_units(SpikeInfo, this_unit_col, remove_unassinged=True))
+n_clust = len(get_units(SpikeInfo, this_unit_col, remove_unassigned=True))
 break_flag = False
 
 while n_clust < n_clust_final or clust_alpha < max_alpha:
@@ -201,7 +165,7 @@ while n_clust < n_clust_final or clust_alpha < max_alpha:
                 colors[k] = 'gray'
 
         plt.ion()
-        mpl.rcParams['figure.dpi'] = 166 # fixme Config.get('output', 'sceen_dpi')
+        mpl.rcParams['figure.dpi'] = Config.get('output', 'screen_dpi')
         fig, axes = plot_clustering(Waveforms, SpikeInfo, this_unit_col, colors=colors)
         fig, axes = plot_compare_waveforms(Waveforms, SpikeInfo, this_unit_col, dt, merge)
 
@@ -223,7 +187,7 @@ while n_clust < n_clust_final or clust_alpha < max_alpha:
         plt.ioff()
 
     # exit condition if n_clusters is reached
-    n_clust = len(get_units(SpikeInfo, this_unit_col, remove_unassinged=True))
+    n_clust = len(get_units(SpikeInfo, this_unit_col, remove_unassigned=True))
     if n_clust == n_clust_final:
         print("desired number of %i clusters reached" % n_clust_final)
         break
@@ -394,7 +358,8 @@ zoom = np.array(Config.get('output', 'zoom').split(','), dtype='float32') / 1000
 for j, Seg in enumerate(Blk.segments):
     seg_name = Path(Seg.annotations['filename']).stem
     outpath = plots_folder / (seg_name + '_fitted_spikes' + fig_format)
-    plot_fitted_spikes(Seg, j, Models, SpikeInfo, final_unit_col, zoom=zoom, save=outpath)
+    wsize = Config.getint('spike detect','wsize') * pq.ms
+    plot_fitted_spikes(Seg, j, Models, SpikeInfo, final_unit_col, wsize, zoom=zoom, save=outpath)
 
 # plot final models
 outpath = plots_folder / (seg_name + '_models_final' + fig_format)

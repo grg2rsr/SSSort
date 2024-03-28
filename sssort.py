@@ -55,7 +55,7 @@ if not data_path.is_absolute():
 
 exp_name = Config.get('path', 'experiment_name')
 results_folder = config_path.parent / exp_name / 'results'
-plots_folder = results_folder / 'plots_sssort'
+plots_folder = results_folder / 'plots'
 detected_folder = plots_folder / 'detected_spikes'
 fitted_folder = plots_folder / 'fitted_spikes'
 

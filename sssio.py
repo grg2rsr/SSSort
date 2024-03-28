@@ -22,8 +22,9 @@ import logging
 """
 
 def create_logger(filename=None, filemode='w'):
-    log_fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
+    """ provide a filename to also log to file, otherwise just print """
     # log_fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
+    log_fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     date_fmt = '%Y-%m-%d %H:%M:%S'
     formatter = logging.Formatter(log_fmt, datefmt=date_fmt)
 
@@ -67,15 +68,35 @@ def handle_unhandled_exception(exc_type, exc_value, exc_traceback):
 
 """
  
- ######## #### ##       ########    ####  #######  
- ##        ##  ##       ##           ##  ##     ## 
- ##        ##  ##       ##           ##  ##     ## 
- ######    ##  ##       ######       ##  ##     ## 
- ##        ##  ##       ##           ##  ##     ## 
- ##        ##  ##       ##           ##  ##     ## 
- ##       #### ######## ########    ####  #######  
+  ######   #######  ##    ## ##     ## ######## ########  ######## ######## ########   ######  
+ ##    ## ##     ## ###   ## ##     ## ##       ##     ##    ##    ##       ##     ## ##    ## 
+ ##       ##     ## ####  ## ##     ## ##       ##     ##    ##    ##       ##     ## ##       
+ ##       ##     ## ## ## ## ##     ## ######   ########     ##    ######   ########   ######  
+ ##       ##     ## ##  ####  ##   ##  ##       ##   ##      ##    ##       ##   ##         ## 
+ ##    ## ##     ## ##   ###   ## ##   ##       ##    ##     ##    ##       ##    ##  ##    ## 
+  ######   #######  ##    ##    ###    ######## ##     ##    ##    ######## ##     ##  ######  
  
 """
+supported_filetypes = ['.asc','.smr','.bin','.csv']
+
+def csv2seg(path, t_col=0, v_col=1, header=1):
+    with open(path, 'r') as fH:
+        lines = [line.strip() for line in fH.readlines()]
+    
+    times = []
+    values = []
+    for i, line in enumerate(lines):
+        if i > header:
+            t = line.split(',')[t_col]
+            v = line.split(',')[v_col]
+            times.append(t)
+            values.append(v)
+    fs = 1/np.average(np.diff(np.array(times)))
+    Asig = neo.core.AnalogSignal(np.array(values), units=pq.uV, sampling_rate=fs * pq.Hz)
+    segment = neo.core.Segment()
+    segment.analogsignals = [Asig]
+    segment.annotate(filename=str(path))
+    return segment
 
 def asc2seg(path):
     """ reads an autospike .asc file into a neo segment """
@@ -119,44 +140,27 @@ def smr2seg(path, channel_index=None):
     return segment
 
 
-# def list2blk(path):
-#     """ convenience function for reading a file containing
-#     file paths to recordings per line into a neo block """
-
-#     with open(path, 'r') as fH:
-#         fnames = [line.strip() for line in fH.readlines()]
-
-#     Segments = []
-#     for fname in fnames:
-#         # logger.info("reading file %s" % fname, log=False)
-#         fmt = os.path.splitext(fname)[1].lower()
-#         if fmt == '.asc':
-#             segment = asc2seg(fname)
-
-#         if fmt == '.raw':
-#             segment = raw2seg(fname)
-
-#         if fmt == '.smr':
-#             segment = smr2seg(fname)
-
-#         Segments.append(segment)
-
-#     Blk = neo.core.Block()
-#     Blk.segments = Segments
-
-#     return Blk
+"""
+ 
+ ####  #######  
+  ##  ##     ## 
+  ##  ##     ## 
+  ##  ##     ## 
+  ##  ##     ## 
+  ##  ##     ## 
+ ####  #######  
+ 
+"""
 
 def dill2blk(path):
     with open(path, 'rb') as fH:
         Blk = dill.load(fH)
     return Blk
 
-
 def blk2dill(Blk, path):
     """ dumps a block via dill"""
     with open(path, 'wb') as fH:
         dill.dump(Blk, fH)
-
 
 def get_data(path):
     """ reads data at path """
@@ -164,16 +168,24 @@ def get_data(path):
     if ext == '.dill':
         return dill2blk(path)
 
-def save_data(Blk, path):
-    """ saves data to path """
-    ext = os.path.splitext(path)[1]
-    if ext == '.dill':
-        blk2dill(Blk, path)
-
 if __name__ == '__main__':
-    """ for command line usage - first argument being path to list file """
-    path = Path(sys.argv[1])
-    seg = smr2seg(path, channel_index=0)
+    """ """
+    path = Path(sys.argv[1]) #
+    args = sys.argv[2:]
+    if path.suffix in supported_filetypes:
+        match path.suffix:
+            case '.asc':
+                seg = asc2seg(path)
+            case '.csv':
+                seg = csv2seg(path, *args)
+            case '.smr':
+                seg = smr2seg(path, *args)
+            case '.bin':
+                seg = raw2seg(path, *args)
+    else:
+        logging.critial("reading files of type %s is currently not supported, but feel free to post an issue on github.com/grg2rsr/SSSort")
+
+    # seg = smr2seg(path, channel_index=0)
     Blk = neo.core.Block()
     Blk.segments = [seg]
     blk2dill(Blk, path.with_suffix('.dill'))
