@@ -7,29 +7,45 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='this is Single Sensillum Sort v.XX authors: Georg Raiser, XX')
     parser.add_argument("mode", choices=['convert','detect','sort','inspect', 'merge', 'postprocess'], help='determines what to do')
     parser.add_argument("path", help="path to the config file")
+    parser.add_argument("-e","--extra-args", action="store", dest="extra_args", help="optional extra arguments, comma separated")
+    parser.add_argument("-v","--verbose", action="store_true", help="print out individual calls")
 
+    # argument parse
     args = vars(parser.parse_args())
-    
-    config_path = Path(args['path']).resolve()
-    mode = args['mode']
+    extra_args = args['extra_args'].split(',') if args['extra_args'] is not None else None
 
+    # paths    
+    config_path = Path(args['path']).resolve()
     install_dir = Path(sys.argv[0]).parent
 
+    mode = args['mode']
+
     if mode == 'convert':
-        subprocess.call("python %s/sssio.py %s " % (install_dir, config_path), shell=True)
+        if extra_args is not None:
+            extra_args = ' '.join(extra_args)
+            cmd = "python %s/sssio.py %s %s" % (install_dir, config_path, extra_args)
+        else:
+            cmd = "python %s/sssio.py %s" % (install_dir, config_path)
 
     if mode == 'detect':
-        subprocess.call("python %s/sssort.py %s %s" % (install_dir, config_path, mode), shell=True)
+        cmd = "python %s/sssort.py %s %s" % (install_dir, config_path, mode)
 
     if mode == 'sort':
-        subprocess.call("python %s/sssort.py %s %s" % (install_dir, config_path, mode), shell=True)
+        cmd = "python %s/sssort.py %s %s" % (install_dir, config_path, mode)
 
     if mode == 'inspect':
-        subprocess.call("python %s/inspect_result.py %s" % (install_dir, config_path), shell=True)
+        cmd = "python %s/inspect_result.py %s" % (install_dir, config_path)
 
     if mode == 'merge':
-        subprocess.call("python %s/manual_merger.py %s" % (install_dir, config_path), shell=True)
+        cmd = "python %s/manual_merger.py %s" % (install_dir, config_path)
 
     if mode == 'postprocess':
-        subprocess.call("python %s/post_processing.py %s" % (install_dir, config_path), shell=True)
+        cmd = "python %s/post_processing.py %s" % (install_dir, config_path)
+    
+    if args['verbose']:
+        print("executing: %s" % cmd)
+    
+    subprocess.call(cmd, shell=True)
+
+
 

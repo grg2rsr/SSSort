@@ -128,14 +128,17 @@ def raw2seg(path, fs, dtype):
     return segment
 
 
-def smr2seg(path, channel_index=None):
+def smr2seg(path, channel_index=0):
     """ channel_index selects the respective channel in the .smr file
      that contains the voltage data """
+    channel_index = int(channel_index)
     reader = neo.io.Spike2IO(path)
     Blk, = reader.read(lazy=False)
     segment = Blk.segments[0]
-    if channel_index is not None:
+    try:
         segment.analogsignals = [segment.analogsignals[channel_index]]
+    except IndexError:
+        logging.error("trying to access channel with index %i in .smr file %s, but the channel is not present" % (channel_index, path))
     segment.annotate(filename=str(path))
     return segment
 
@@ -171,7 +174,8 @@ def get_data(path):
 if __name__ == '__main__':
     """ """
     path = Path(sys.argv[1]) #
-    args = sys.argv[2:]
+    args = sys.argv[2:] if len(sys.argv) > 1 else None
+
     if path.suffix in supported_filetypes:
         match path.suffix:
             case '.asc':
