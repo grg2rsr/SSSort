@@ -183,7 +183,7 @@ if __name__ == '__main__':
             case '.bin':
                 seg = raw2seg(path, *args)
     else:
-        logging.critial("reading files of type %s is currently not supported, but feel free to post an issue on github.com/grg2rsr/SSSort")
+        logging.critical("reading files of type %s is currently not supported, but feel free to post an issue on github.com/grg2rsr/SSSort")
 
     # seg = smr2seg(path, channel_index=0)
     Blk = neo.core.Block()
