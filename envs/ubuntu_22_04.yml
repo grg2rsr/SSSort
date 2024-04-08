@@ -1,0 +1,20 @@
+name: sssort
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip=23.0
+  - pip:
+    - dill==0.3.6
+    - numpy==1.24.2
+    - scipy==1.10.1
+    - pandas==1.5
+    - matplotlib==3.7
+    - neo==0.12.0
+    - quantities==0.14.1
+    - elephant==0.12.0
+    - scikit-learn==1.2.2
+    - tqdm==4.65.0
+    - seaborn==0.12
+# prefix: /home/georg/anaconda3/envs/sssort
