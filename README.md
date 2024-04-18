@@ -16,7 +16,7 @@ _SSSort_ is a spike sorting algorithm for single sensillum recordings (SSR). _SS
 ```
 git clone https://github.com/grg2rsr/SSSort.git
 cd SSSort
-conda create -n sssort -f ./envs/sssort.yml
+conda env create -n sssort -f ./envs/ubuntu_22_04.yml
 python setup.py
 ```
 currently does it.
@@ -77,7 +77,7 @@ If in the `config.ini` the parameter `manual_merge = True`, all the algorithm wi
 ### `inspect`
 After sorting, you can interactively inspect the result using:
 ```
-sssort inspect path_to_config.ini [trial_index]
+sssort inspect path_to_config.ini -e [trial_index]
 ```
 This opens an interactive viewer (matplotlib) to inspect the sorting quality in an interactive manner
 
