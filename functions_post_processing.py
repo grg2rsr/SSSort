@@ -17,8 +17,6 @@ import pandas as pd
 import neo
 import elephant as ele
 
-# print
-import tableprint as tp
 
 # plotting
 import matplotlib as mpl

@@ -405,7 +405,8 @@ def train_Models(SpikeInfo, unit_column, Waveforms, n_comp=5, model_type=Spike_M
         # get the corresponding spikes - restrict training to good spikes
         SInfo = SpikeInfo.groupby([unit_column, 'good']).get_group((unit, True))
         # data
-        ix = SInfo['id'].values
+        ix = SInfo['id']
+        ix = np.array(ix.values, dtype='int32')
         T = Waveforms[:, ix]
         frates = SInfo['frate_fast'].values
         # model
