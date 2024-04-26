@@ -2,23 +2,30 @@ import sys, os
 import argparse
 import subprocess
 from pathlib import Path
+import platform
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='this is Single Sensillum Sort v.XX authors: Georg Raiser, XX')
-    parser.add_argument("mode", choices=['convert','detect','sort','inspect', 'merge', 'postprocess'], help='determines what to do')
-    parser.add_argument("path", help="path to the config file")
-    parser.add_argument("-e","--extra-args", action="store", dest="extra_args", help="optional extra arguments, comma separated")
-    parser.add_argument("-v","--verbose", action="store_true", help="print out individual calls")
+    if platform.system() == "Linux":
+        parser = argparse.ArgumentParser(description='this is Single Sensillum Sort v.XX authors: Georg Raiser, XX')
+        parser.add_argument("mode", choices=['convert','detect','sort','inspect', 'merge', 'postprocess'], help='determines what to do')
+        parser.add_argument("path", help="path to the config file")
+        parser.add_argument("-e","--extra-args", action="store", dest="extra_args", help="optional extra arguments, comma separated")
+        parser.add_argument("-v","--verbose", action="store_true", help="print out system call")
 
-    # argument parse
-    args = vars(parser.parse_args())
-    extra_args = args['extra_args'].split(',') if args['extra_args'] is not None else None
+        # argument parse
+        args = vars(parser.parse_args())
+        extra_args = args['extra_args'].split(',') if args['extra_args'] is not None else None
 
-    # paths    
-    config_path = Path(args['path']).resolve()
-    install_dir = Path(sys.argv[0]).parent
+        # paths    
+        config_path = Path(args['path']).resolve()
+        install_dir = Path(sys.argv[0]).parent
 
-    mode = args['mode']
+        mode = args['mode']
+
+    else:
+        mode = sys.argv[1]
+        config_path = sys.argv[2]
+        install_dir = Path(sys.argv[0]).parent
 
     if mode == 'convert':
         if extra_args is not None:
