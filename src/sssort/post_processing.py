@@ -5,8 +5,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import sssio
-from plotters import *
 
+import sssort.functions as sf
 import sssort.plotters as sp
 
 from functions_post_processing import *
@@ -106,13 +106,13 @@ mpl.rcParams['figure.dpi'] = Config.get('output', 'fig_dpi')
 fig_format = Config.get('output', 'fig_format')
 
 # Load clustering data
-Blk = get_data(results_folder / 'result.dill')
+Blk = sssio.get_data(results_folder / 'result.dill')
 
 SpikeInfo = pd.read_csv(results_folder / 'SpikeInfo.csv')
 
 unit_column = [col for col in SpikeInfo.columns if col.startswith('unit')][-1]
 SpikeInfo = SpikeInfo.astype({unit_column: str})
-units = get_units(SpikeInfo, unit_column)
+units = sf.get_units(SpikeInfo, unit_column)
 
 """
   #####
@@ -278,7 +278,7 @@ if 'unit_labeled' not in SpikeInfo.columns:
 
 unit_column = 'unit_labeled'
 SpikeInfo = SpikeInfo.astype({'id': str, unit_column: str})
-units = get_units(SpikeInfo, unit_column)
+units = sf.get_units(SpikeInfo, unit_column)
 
 stimes = SpikeInfo['time']
 seg = Blk.segments[seg_no]
@@ -292,7 +292,7 @@ ifs = int(
 # recalculate the latest firing rates according to spike assignments in unit_column
 # kernel_slow = Config.getfloat('kernels','sigma_slow')
 kernel_fast = Config.getfloat('kernels', 'sigma_fast')
-calc_update_final_frates(SpikeInfo, unit_column, kernel_fast)
+sf.calc_update_final_frates(SpikeInfo, unit_column, kernel_fast)
 
 # TODO: try to reuse resized waveforms from cluster identification
 waveforms_path = config_path.parent / results_folder / 'Waveforms.npy'
@@ -304,13 +304,13 @@ n_model_comp = Config.getint('spike model', 'n_model_comp')
 
 spike_model_type = Config.get('postprocessing', 'spike_model_type')
 
-spike_model = Spike_Model if spike_model_type == 'individual' else Spike_Model_Nlin
-Models = train_Models(
+spike_model = sf.Spike_Model if spike_model_type == 'individual' else Spike_Model_Nlin
+Models = sf.train_Models(
     SpikeInfo, unit_column, Waveforms, n_comp=n_model_comp, model_type=spike_model
 )
 
 unit_ids = SpikeInfo[unit_column]
-units = get_units(SpikeInfo, unit_column)
+units = sf.get_units(SpikeInfo, unit_column)
 frate = {}
 for unit in units:
     frate[unit] = SpikeInfo['frate_' + unit]

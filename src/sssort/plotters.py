@@ -17,7 +17,7 @@ import seaborn as sns
 import sssort.functions as sf
 from sssort import sssio
 
-logger = sssio.get_logger()  # TODO bring this one back in
+logger = sssio.get_logger()
 
 
 def get_colors(units, palette='hls', desat=None, keep=True):

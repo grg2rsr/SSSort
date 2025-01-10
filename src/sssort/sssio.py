@@ -205,7 +205,7 @@ if __name__ == '__main__':
                 seg = raw2seg(path, *args)
     else:
         logging.critical(
-            'reading files of type %s is currently not supported, but feel free to post an issue on github.com/grg2rsr/SSSort'
+            f'reading files of type {path.suffix} is currently not supported, but feel free to post an issue on github.com/grg2rsr/SSSort'
         )
 
     # seg = smr2seg(path, channel_index=0)
