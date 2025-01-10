@@ -1,7 +1,6 @@
 # sys
 import sys
 import os
-import shutil
 import dill
 import configparser
 from pathlib import Path
@@ -9,8 +8,6 @@ from pathlib import Path
 # sci
 import numpy as np
 import pandas as pd
-from sklearn.cluster import KMeans
-from sklearn.decomposition import PCA
 
 # ephys
 import neo
@@ -51,15 +48,15 @@ Config = configparser.ConfigParser()
 Config.read(config_path)
 
 # handling paths and creating output directory
-data_path = Path(Config.get('path', 'data_path'))
+data_path = Path(Config.get("path", "data_path"))
 # if not data_path.is_absolute():
 #     data_path = config_path.parent / data_path
 
-exp_name = Config.get('path', 'experiment_name')
-results_folder = config_path.parent / exp_name / 'results'
-plots_folder = results_folder / 'plots'
+exp_name = Config.get("path", "experiment_name")
+results_folder = config_path.parent / exp_name / "results"
+plots_folder = results_folder / "plots"
 
-logger = sssio.get_logger(config_path.parent / exp_name / (exp_name+'.log'))
+logger = sssio.get_logger(config_path.parent / exp_name / (exp_name + ".log"))
 logger.info(" - manual merging - ")
 
 os.chdir(results_folder)
@@ -76,27 +73,27 @@ os.chdir(results_folder)
  
 """
 # read data
-Blk = sssio.dill2blk(results_folder / 'result.dill')
+Blk = sssio.dill2blk(results_folder / "result.dill")
 
 # get data properies
 fs = Blk.segments[0].analogsignals[0].sampling_rate
 dt = (1 / fs).rescale(pq.s)
 
 # loading SpikeInfo
-SpikeInfo = pd.read_csv(results_folder / 'SpikeInfo.csv')
-unit_columns = [col for col in SpikeInfo.columns if col.startswith('unit_')]
+SpikeInfo = pd.read_csv(results_folder / "SpikeInfo.csv")
+unit_columns = [col for col in SpikeInfo.columns if col.startswith("unit_")]
 SpikeInfo[unit_columns] = SpikeInfo[unit_columns].astype(str)
 
 # loading Models
-with open(results_folder / "Models.dill", 'rb') as fH:
+with open(results_folder / "Models.dill", "rb") as fH:
     Models = dill.load(fH)
 
 # loading Waveforms
 Waveforms = np.load(results_folder / "Waveforms.npy")
 
 # plotting
-mpl.rcParams['figure.dpi'] = Config.get('output', 'fig_dpi')
-fig_format = Config.get('output', 'fig_format')
+mpl.rcParams["figure.dpi"] = Config.get("output", "fig_dpi")
+fig_format = Config.get("output", "fig_format")
 
 """
  
@@ -109,19 +106,19 @@ fig_format = Config.get('output', 'fig_format')
  ####    ##    ######## ##     ## ##     ##    ##    ######## 
  
 """
-last_unit_col = [col for col in SpikeInfo.columns if col.startswith('unit')][-1]
+last_unit_col = [col for col in SpikeInfo.columns if col.startswith("unit")][-1]
 if len(sys.argv) <= 2:
     this_unit_col = last_unit_col
 else:
     this_unit_col = sys.argv[2]
     ix = np.where(SpikeInfo.columns == this_unit_col)[0][0]
-    SpikeInfo = SpikeInfo.iloc[:,:ix+1]
+    SpikeInfo = SpikeInfo.iloc[:, : ix + 1]
 
 units = get_units(SpikeInfo, this_unit_col)
 n_units = len(units)
 
-clust_alpha = Config.getfloat('spike sort', 'clust_alpha')
-n_clust_final = Config.getint('spike sort', 'n_clust_final')
+clust_alpha = Config.getfloat("spike sort", "clust_alpha")
+n_clust_final = Config.getint("spike sort", "n_clust_final")
 
 # hardcoded parameters
 alpha_incr = 0.1
@@ -133,14 +130,12 @@ n_clust = len(get_units(SpikeInfo, this_unit_col, remove_unassigned=True))
 break_flag = False
 
 while n_clust < n_clust_final or clust_alpha < max_alpha:
-
     # check for merges - if no merge - exit
     units = get_units(SpikeInfo, this_unit_col)
     Avgs, Sds = calculate_pairwise_distances(Waveforms, SpikeInfo, this_unit_col)
     merge = best_merge(Avgs, Sds, units, clust_alpha, exclude=rejected_merges)
 
     while len(merge) == 0:
-        
         clust_alpha += alpha_incr
         logger.info("increasing alpha to: %.2f" % clust_alpha)
         merge = best_merge(Avgs, Sds, units, clust_alpha, exclude=rejected_merges)
@@ -148,7 +143,9 @@ while n_clust < n_clust_final or clust_alpha < max_alpha:
         # bail condition in case all possible merges are rejected manually by the user
         # an min numer is not reached yet
         if clust_alpha > max_alpha:
-            logger.critical("no more good merges, quitting before reaching number of desired clusters")
+            logger.critical(
+                "no more good merges, quitting before reaching number of desired clusters"
+            )
             break_flag = True
             break
 
@@ -156,34 +153,35 @@ while n_clust < n_clust_final or clust_alpha < max_alpha:
         break
 
     if len(merge) > 0:
-
         # show plots for this merge
         units = get_units(SpikeInfo, this_unit_col)
         colors = get_colors(units)
         for k, v in colors.items():
             if k not in [str(m) for m in merge]:
-                colors[k] = 'gray'
+                colors[k] = "gray"
 
         plt.ion()
-        mpl.rcParams['figure.dpi'] = Config.get('output', 'screen_dpi')
+        mpl.rcParams["figure.dpi"] = Config.get("output", "screen_dpi")
         fig, axes = plot_clustering(Waveforms, SpikeInfo, this_unit_col, colors=colors)
-        fig, axes = plot_compare_waveforms(Waveforms, SpikeInfo, this_unit_col, dt, merge)
+        fig, axes = plot_compare_waveforms(
+            Waveforms, SpikeInfo, this_unit_col, dt, merge
+        )
 
         # ask for user input
-        if input("merge %s with %s (Y/N)?" % tuple(merge)).upper() == 'Y':
+        if input("merge %s with %s (Y/N)?" % tuple(merge)).upper() == "Y":
             # the merge
-            ix = SpikeInfo.groupby(this_unit_col).get_group(merge[1])['id']
+            ix = SpikeInfo.groupby(this_unit_col).get_group(merge[1])["id"]
             SpikeInfo.loc[ix, this_unit_col] = merge[0]
             logger.info("manually accepted merge: %s with %s" % tuple(merge))
             # resetting alpha
-            clust_alpha = Config.getfloat('spike sort', 'clust_alpha')
+            clust_alpha = Config.getfloat("spike sort", "clust_alpha")
         else:
             # if no, add merge to the list of forbidden merges
             rejected_merges.append(merge)
             logger.info("manually rejected merge: %s with %s" % tuple(merge))
 
-        mpl.rcParams['figure.dpi'] = Config.get('output', 'fig_dpi')
-        plt.close('all')
+        mpl.rcParams["figure.dpi"] = Config.get("output", "fig_dpi")
+        plt.close("all")
         plt.ioff()
 
     # exit condition if n_clusters is reached
@@ -206,32 +204,39 @@ while n_clust < n_clust_final or clust_alpha < max_alpha:
 
 logger.info(" - finishing up - ")
 
-last_unit_col = [col for col in SpikeInfo.columns if col.startswith('unit')][-1]
-final_unit_col = 'unit_%i' % (int(last_unit_col.split('_')[1]) + 1)
+last_unit_col = [col for col in SpikeInfo.columns if col.startswith("unit")][-1]
+final_unit_col = "unit_%i" % (int(last_unit_col.split("_")[1]) + 1)
 
 # final calculation of frate fast
-kernel_slow = Config.getfloat('kernels', 'sigma_slow')
-kernel_fast = Config.getfloat('kernels', 'sigma_fast')
+kernel_slow = Config.getfloat("kernels", "sigma_slow")
+kernel_fast = Config.getfloat("kernels", "sigma_fast")
 calc_update_frates(SpikeInfo, last_unit_col, kernel_fast, kernel_slow)
 
 # train final models
-n_model_comp = Config.getint('spike model', 'n_model_comp')
+n_model_comp = Config.getint("spike model", "n_model_comp")
 Models = train_Models(SpikeInfo, last_unit_col, Waveforms, n_comp=n_model_comp)
 outpath = plots_folder / ("Models_final%s" % fig_format)
 plot_Models(Models, save=outpath)
 
 # final scoring and assignment
-rescore = False # FUTURE TODO - this might make sense under some conditions
+rescore = False  # FUTURE TODO - this might make sense under some conditions
 # make this a flag in the config - explore when and when not this is better
-if rescore: 
-    reassign_penalty = Config.getfloat('spike sort', 'reassign_penalty')
-    noise_penalty = Config.getfloat('spike sort', 'noise_penalty')
-    Scores, units = Score_spikes(Waveforms, SpikeInfo, last_unit_col, Models, score_metric=Rss,
-                                reassign_penalty=reassign_penalty, noise_penalty=noise_penalty)
+if rescore:
+    reassign_penalty = Config.getfloat("spike sort", "reassign_penalty")
+    noise_penalty = Config.getfloat("spike sort", "noise_penalty")
+    Scores, units = Score_spikes(
+        Waveforms,
+        SpikeInfo,
+        last_unit_col,
+        Models,
+        score_metric=Rss,
+        reassign_penalty=reassign_penalty,
+        noise_penalty=noise_penalty,
+    )
 
     # assign new labels
     min_ix = np.argmin(Scores, axis=1)
-    new_labels = np.array([units[i] for i in min_ix], dtype='U')
+    new_labels = np.array([units[i] for i in min_ix], dtype="U")
     SpikeInfo[final_unit_col] = new_labels
 
     # clean assignment
@@ -249,7 +254,7 @@ os.makedirs(plots_folder, exist_ok=True)
 
 
 # waveforms to disk
-outpath = results_folder / 'Waveforms.npy'
+outpath = results_folder / "Waveforms.npy"
 np.save(outpath, Waveforms)
 logger.info("saving spike waveforms to %s" % outpath)
 
@@ -259,26 +264,37 @@ plot_clustering(Waveforms, SpikeInfo, final_unit_col, save=outpath, N=2000)
 units = get_units(SpikeInfo, final_unit_col)
 for unit in units:
     outpath = plots_folder / ("Clustering_%s%s" % (unit, fig_format))
-    plot_clustering(Waveforms, SpikeInfo, final_unit_col, color_by=unit, save=outpath, N=2000)
+    plot_clustering(
+        Waveforms, SpikeInfo, final_unit_col, color_by=unit, save=outpath, N=2000
+    )
 
 # plotting waveforms
 outpath = plots_folder / ("waveforms_final" + fig_format)
-plot_waveforms(Waveforms, SpikeInfo, dt.rescale(pq.ms).magnitude, final_unit_col, N=100, save=outpath)
+plot_waveforms(
+    Waveforms,
+    SpikeInfo,
+    dt.rescale(pq.ms).magnitude,
+    final_unit_col,
+    N=100,
+    save=outpath,
+)
 
 # update spike labels
 kernel = ele.kernels.GaussianKernel(sigma=kernel_fast * pq.s)
 
 for i, seg in enumerate(Blk.segments):
-    spike_labels = SpikeInfo.groupby(('segment')).get_group((i))[final_unit_col].values
-    SpikeTrain, = select_by_dict(seg.spiketrains, kind='all_spikes')
-    SpikeTrain.annotations['unit_labels'] = list(spike_labels)
+    spike_labels = SpikeInfo.groupby(("segment")).get_group((i))[final_unit_col].values
+    (SpikeTrain,) = select_by_dict(seg.spiketrains, kind="all_spikes")
+    SpikeTrain.annotations["unit_labels"] = list(spike_labels)
 
     # make spiketrains
-    spike_labels = SpikeTrain.annotations['unit_labels']
+    spike_labels = SpikeTrain.annotations["unit_labels"]
     sts = [SpikeTrain]
     for unit in units:
         times = SpikeTrain.times[np.array(spike_labels) == unit]
-        st = neo.core.SpikeTrain(times, t_start=SpikeTrain.t_start, t_stop=SpikeTrain.t_stop)
+        st = neo.core.SpikeTrain(
+            times, t_start=SpikeTrain.t_start, t_stop=SpikeTrain.t_stop
+        )
         st.annotate(unit=unit)
         sts.append(st)
     seg.spiketrains = sts
@@ -286,47 +302,51 @@ for i, seg in enumerate(Blk.segments):
     # est firing rates
     asigs = [seg.analogsignals[0]]
     for unit in units:
-        St, = select_by_dict(seg.spiketrains, unit=unit)
-        frate = ele.statistics.instantaneous_rate(St, kernel=kernel, sampling_period=1 / fs)
-        frate.annotate(kind='frate_fast', unit=unit)
+        (St,) = select_by_dict(seg.spiketrains, unit=unit)
+        frate = ele.statistics.instantaneous_rate(
+            St, kernel=kernel, sampling_period=1 / fs
+        )
+        frate.annotate(kind="frate_fast", unit=unit)
         asigs.append(frate)
     seg.analogsignals = asigs
 
 # store SpikeInfo
-outpath = results_folder / 'SpikeInfo.csv'
+outpath = results_folder / "SpikeInfo.csv"
 logger.info("saving SpikeInfo to %s" % outpath)
 SpikeInfo.to_csv(outpath)
 
 # store Block
-outpath = results_folder / 'result.dill'
+outpath = results_folder / "result.dill"
 logger.info("saving Blk as .dill to %s" % outpath)
 sssio.blk2dill(Blk, outpath)
 
 # store models
-outpath = results_folder / 'Models.dill'
+outpath = results_folder / "Models.dill"
 logger.info("saving Models as .dill to %s" % outpath)
-with open(outpath, 'wb') as fH:
+with open(outpath, "wb") as fH:
     dill.dump(Models, fH)
 
 # output csv data
-if Config.getboolean('output', 'csv'):
+if Config.getboolean("output", "csv"):
     logger.info("writing csv")
 
     # SpikeTimes
     for i, Seg in enumerate(Blk.segments):
-        seg_name = Path(Seg.annotations['filename']).stem
+        seg_name = Path(Seg.annotations["filename"]).stem
         for j, unit in enumerate(units):
-            St, = select_by_dict(Seg.spiketrains, unit=unit)
-            outpath = results_folder / ("Segment_%s_unit_%s_spike_times.txt" % (seg_name, unit))
+            (St,) = select_by_dict(Seg.spiketrains, unit=unit)
+            outpath = results_folder / (
+                "Segment_%s_unit_%s_spike_times.txt" % (seg_name, unit)
+            )
             np.savetxt(outpath, St.times.magnitude)
 
     # firing rates - full res
     for i, Seg in enumerate(Blk.segments):
         FratesDf = pd.DataFrame()
-        seg_name = Path(Seg.annotations['filename']).stem
+        seg_name = Path(Seg.annotations["filename"]).stem
         for j, unit in enumerate(units):
-            asig, = select_by_dict(Seg.analogsignals, kind='frate_fast', unit=unit)
-            FratesDf['t'] = asig.times.magnitude
+            (asig,) = select_by_dict(Seg.analogsignals, kind="frate_fast", unit=unit)
+            FratesDf["t"] = asig.times.magnitude
             FratesDf[unit] = asig.magnitude.flatten()
 
         outpath = results_folder / ("Segment_%s_frates.csv" % seg_name)
@@ -349,20 +369,22 @@ logger.info("all data is stored")
 logger.info(" - making diagnostic plots - ")
 # plot all sorted spikes
 for j, Seg in enumerate(Blk.segments):
-    seg_name = Path(Seg.annotations['filename']).stem
-    outpath = plots_folder / (seg_name + '_overview' + fig_format)
+    seg_name = Path(Seg.annotations["filename"]).stem
+    outpath = plots_folder / (seg_name + "_overview" + fig_format)
     plot_segment(Seg, units, save=outpath)
 
 # plot all sorted spikes
-zoom = np.array(Config.get('output', 'zoom').split(','), dtype='float32') / 1000
+zoom = np.array(Config.get("output", "zoom").split(","), dtype="float32") / 1000
 for j, Seg in enumerate(Blk.segments):
-    seg_name = Path(Seg.annotations['filename']).stem
-    outpath = plots_folder / (seg_name + '_fitted_spikes' + fig_format)
-    wsize = Config.getint('spike detect','wsize') * pq.ms
-    plot_fitted_spikes(Seg, j, Models, SpikeInfo, final_unit_col, wsize, zoom=zoom, save=outpath)
+    seg_name = Path(Seg.annotations["filename"]).stem
+    outpath = plots_folder / (seg_name + "_fitted_spikes" + fig_format)
+    wsize = Config.getint("spike detect", "wsize") * pq.ms
+    plot_fitted_spikes(
+        Seg, j, Models, SpikeInfo, final_unit_col, wsize, zoom=zoom, save=outpath
+    )
 
 # plot final models
-outpath = plots_folder / (seg_name + '_models_final' + fig_format)
+outpath = plots_folder / (seg_name + "_models_final" + fig_format)
 plot_Models(Models, save=outpath)
 logger.info("all plotting done")
 
