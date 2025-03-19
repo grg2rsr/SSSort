@@ -10,15 +10,15 @@ import numpy as np
 
 
 # own
-from functions import *
-from sssio import *
+import sssort.functions as sf
+from sssort import sssio
 
 
 def calc_update_final_frates(SpikeInfo, unit_column, kernel_fast):
     """calculate all firing rates for all units, based on unit_column. This is for after units
     have been identified as 'A' or 'B' (or unknown). Updates SpikeInfo with new columns frate_A, frate_B"""
 
-    from_units = get_units(SpikeInfo, unit_column)
+    from_units = sf.get_units(SpikeInfo, unit_column)
 
     # estimating firing rate profile for "from unit" and getting the rate at "to unit" timepoints
     for j, from_unit in enumerate(from_units):
@@ -26,36 +26,36 @@ def calc_update_final_frates(SpikeInfo, unit_column, kernel_fast):
             SInfo = SpikeInfo.groupby([unit_column]).get_group((from_unit))
 
             # spike times
-            from_times = SInfo["time"].values
-            to_times = SpikeInfo["time"].values
+            from_times = SInfo['time'].values
+            to_times = SpikeInfo['time'].values
             # estimate its own rate at its own spike times
-            rate = est_rate(from_times, to_times, kernel_fast)
+            rate = sf.est_rate(from_times, to_times, kernel_fast)
             # set
-            SpikeInfo["frate_" + from_unit] = rate
+            SpikeInfo['frate_' + from_unit] = rate
         except:
             # can not set it's own rate, when there are no spikes in this segment for this unit
             pass
 
 
-def save_all(results_folder, SpikeInfo, Blk, logger, FinalSpikes=False, f_extension=""):
+def save_all(results_folder, SpikeInfo, Blk, logger, FinalSpikes=False, f_extension=''):
     # store SpikeInfo
-    outpath = results_folder / ("SpikeInfo_%s.csv" % f_extension)
-    logger.info("saving SpikeInfo to %s" % outpath)
+    outpath = results_folder / ('SpikeInfo_%s.csv' % f_extension)
+    logger.info('saving SpikeInfo to %s' % outpath)
     SpikeInfo.to_csv(outpath, index=False)
 
     if FinalSpikes:
         # store separate spike time lists for A and B cells
-        for unit in ["A", "B"]:
-            st = SpikeInfo.groupby("unit_final").get_group(unit)["time"]
-            outpath = results_folder / ("Spikes" + unit + ".csv")
+        for unit in ['A', 'B']:
+            st = SpikeInfo.groupby('unit_final').get_group(unit)['time']
+            outpath = results_folder / ('Spikes' + unit + '.csv')
             np.savetxt(outpath, st)
 
     # store Block
-    outpath = results_folder / "result.dill"
-    logger.info("saving Blk as .dill to %s" % outpath)
-    blk2dill(Blk, outpath)
+    outpath = results_folder / 'result.dill'
+    logger.info('saving Blk as .dill to %s' % outpath)
+    sssio.blk2dill(Blk, outpath)
 
-    logger.info("data is stored")
+    logger.info('data is stored')
 
 
 """
@@ -144,22 +144,22 @@ def save_all(results_folder, SpikeInfo, Blk, logger, FinalSpikes=False, f_extens
 #     return D_pw.T
 
 
-def align_to(spike, mode="peak"):
+def align_to(spike, mode='peak'):
     if spike.shape[0] != 0:
         if type(mode) is not str:
             mn = mode
-        elif mode == "min":
+        elif mode == 'min':
             mn = np.min(spike)
-        elif mode == "peak":
+        elif mode == 'peak':
             mn = np.max(spike)
-        elif mode == "end":
+        elif mode == 'end':
             mn = spike[-1]
-        elif mode == "ini":
+        elif mode == 'ini':
             mn = spike[0]
-        elif mode == "mean":
+        elif mode == 'mean':
             mn = np.mean(spike)
         else:
-            print("fail")
+            print('fail')
             return spike
 
         if mn != 0:
@@ -224,12 +224,12 @@ def dist(d, t, n_samples, pos, unit=None, ax=None, avg_amplitude=1):
     dst = np.linalg.norm(d2 - t2)
     dst = dst / (stop - start)
     if ax is not None:
-        ax.plot(d, ".", markersize=1, label="org. trace")
-        ax.plot(d2, linewidth=0.7, label="comp. region")
-        ax.plot(t2, linewidth=0.7, label="template")
+        ax.plot(d, '.', markersize=1, label='org. trace')
+        ax.plot(d2, linewidth=0.7, label='comp. region')
+        ax.plot(t2, linewidth=0.7, label='template')
         ax.set_ylim(-1.2, 1.2)
-        lbl = unit + ": d=" if unit is not None else ""
-        ax.set_title(lbl + ("%.2f" % (dst * 100 / avg_amplitude) + "%"))
+        lbl = unit + ': d=' if unit is not None else ''
+        ax.set_title(lbl + ('%.2f' % (dst * 100 / avg_amplitude) + '%'))
         ax.legend()
     return dst
 
@@ -253,12 +253,12 @@ def compound_dist(d, t1, t2, n_samples, pos1, pos2, ax=None, avg_amplitude=1):
     dst = np.linalg.norm(d2 - t)
     dst = dst / (stop_r - start_l)
     if ax is not None:
-        ax.plot(d, ".", markersize=1)
+        ax.plot(d, '.', markersize=1)
         ax.plot(d2, linewidth=0.7)
         ax.plot(t, linewidth=0.7)
         ax.set_ylim(-1.2, 1.2)
-        lbl = "A+B: d=" if pos1 <= pos2 else "B+A: d="
-        ax.set_title(lbl + ("%.2f" % (dst * 100 / avg_amplitude) + "%"))
+        lbl = 'A+B: d=' if pos1 <= pos2 else 'B+A: d='
+        ax.set_title(lbl + ('%.2f' % (dst * 100 / avg_amplitude) + '%'))
     return dst
 
 
@@ -304,7 +304,7 @@ def get_aligned_wmean_by_unit(Waveforms, SpikeInfo, units, unit_column, mode):
     mean_waveforms = {}
 
     for unit in units:
-        unit_ids = SpikeInfo.groupby(unit_column).get_group(unit)["id"]
+        unit_ids = SpikeInfo.groupby(unit_column).get_group(unit)['id']
         waveforms = Waveforms[:, unit_ids]
 
         # Align waveforms by mode

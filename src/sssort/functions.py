@@ -22,7 +22,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-warnings.filterwarnings("ignore")
+warnings.filterwarnings('ignore')
 t0 = time.time()
 
 """
@@ -59,8 +59,8 @@ def select_by_dict(objs, **selection):
 
 def sort_units(units):
     """helper to sort units ascendingly according to their number"""
-    units = np.array(units, dtype="int32")
-    units = np.sort(units).astype("U")
+    units = np.array(units, dtype='int32')
+    units = np.sort(units).astype('U')
     return list(units)
 
 
@@ -69,7 +69,7 @@ def get_units(SpikeInfo, unit_column, remove_unassigned=True):
     units = list(pd.unique(SpikeInfo[unit_column]))
 
     if remove_unassigned:
-        for unassigned_unit in ["-1", "-2"]:
+        for unassigned_unit in ['-1', '-2']:
             if unassigned_unit in units:
                 units.remove(unassigned_unit)
 
@@ -86,9 +86,9 @@ def reject_unit(SpikeInfo, unit_column, min_good=80):
     units = get_units(SpikeInfo, unit_column)
     for unit in units:
         Df = SpikeInfo.groupby(unit_column).get_group(unit)
-        if np.sum(Df["good"]) < min_good:
-            logger.warning("not enough good spikes for unit %s" % unit)
-            SpikeInfo.loc[Df.index, unit_column] = "-1"
+        if np.sum(Df['good']) < min_good:
+            logger.warning(f'not enough good spikes for unit {unit}')
+            SpikeInfo.loc[Df.index, unit_column] = '-1'
     return SpikeInfo
 
 
@@ -97,13 +97,13 @@ def get_changes(SpikeInfo, unit_column):
     to this it"""
 
     this_unit_col = unit_column
-    it = int(this_unit_col.split("_")[1])
-    prev_unit_col = "unit_%i" % (it - 1)
+    it = int(this_unit_col.split('_')[1])
+    prev_unit_col = f'unit_{it - 1}'
 
     this_units = SpikeInfo[this_unit_col].values
     prev_units = SpikeInfo[prev_unit_col].values
 
-    ix_valid = ~np.logical_or(this_units == "-1", prev_units == "-1")
+    ix_valid = ~np.logical_or(this_units == '-1', prev_units == '-1')
     n_changes = np.sum(this_units[ix_valid] != prev_units[ix_valid])
 
     # has received spikes from?
@@ -119,11 +119,10 @@ def check_convergence(SpikeInfo, it, hist, conv_crit):
     """returns True if changes have stabilized"""
     if it > hist:
         f_changes = []
-        # n_spikes = np.sum(SpikeInfo['unit_%i' % it] != -1) # this won't work
         n_spikes = SpikeInfo.shape[0]
 
         for j in range(hist):
-            col = "unit_%i" % (it - j)
+            col = f'unit_{it - j}'
             f_changes.append(get_changes(SpikeInfo, col)[0] / n_spikes)
 
         if np.average(f_changes) < conv_crit:
@@ -156,10 +155,10 @@ def MAD(AnalogSignal, keep_units=True):
     return mad
 
 
-def spike_detect(AnalogSignal, min_height, min_prominence, mode="positive"):
+def spike_detect(AnalogSignal, min_height, min_prominence, mode='positive'):
     data = AnalogSignal.magnitude.flatten()
 
-    if mode == "negative":
+    if mode == 'negative':
         data = data * -1
 
     mad = MAD(AnalogSignal, keep_units=False)
@@ -254,12 +253,12 @@ def reject_spikes(Waveforms, SpikeInfo, unit_column, n_neighbors=80, verbose=Fal
         except ValueError:
             # raised when n_neighbors <= n_samples
             # set all bad
-            a = np.ones(ix.shape[0]).astype("bool")
+            a = np.ones(ix.shape[0]).astype('bool')
 
         b = peak_reject(Waveforms[:, ix])
         good_inds_unit = ~np.logical_or(a, b)
 
-        SpikeInfo.loc[ix, "good"] = good_inds_unit
+        SpikeInfo.loc[ix, 'good'] = good_inds_unit
 
         if verbose:
             n_total = ix.shape[0]
@@ -267,8 +266,7 @@ def reject_spikes(Waveforms, SpikeInfo, unit_column, n_neighbors=80, verbose=Fal
             n_bad = np.sum(~good_inds_unit)
             frac = n_good / n_total
             logger.info(
-                "# spikes for unit %s: total:%i \t good/bad:%i,%i \t %.2f"
-                % (unit, n_total, n_good, n_bad, frac)
+                f'# spikes for unit {unit}: total:{n_total} \t good/bad:{n_good},{n_bad} \t {frac:.2f}'
             )
 
     return SpikeInfo
@@ -303,7 +301,7 @@ class Spike_Model:
         self.frates = None
         pass
 
-    def fit(self, Waveforms, frates, model="RANSAC"):
+    def fit(self, Waveforms, frates, model='RANSAC'):
         """fits the linear model"""
 
         # keep data
@@ -316,13 +314,12 @@ class Spike_Model:
         self.Waveforms_pca = self.pca.transform(Waveforms.T)
 
         self.pfits = []
-        p0 = [0, 0]
         for i in range(self.n_comp):
-            if model == "RANSAC":
+            if model == 'RANSAC':
                 LM = linear_model.RANSACRegressor()
                 LM.fit(self.frates.reshape(-1, 1), self.Waveforms_pca[:, i])
                 pfit = (LM.estimator_.coef_[0], LM.estimator_.intercept_)  # for ransac
-            if model == "linregress":
+            if model == 'linregress':
                 pfit = stats.linregress(self.frates, self.Waveforms_pca[:, i])[:2]
             self.pfits.append(pfit)
 
@@ -372,21 +369,21 @@ class Spike_Model_Nlin:
         # dn = sp.stats.linregress(frates, mn)
         bot = np.array([0, 0, -1, -np.inf])  # lower limit
         top = np.array([np.inf, np.inf, 0, np.inf])  # upper limit
-        up = least_squares(self.fun, x0, loss="soft_l1", f_scale=0.1, args=(frates, mx))
+        up = least_squares(self.fun, x0, loss='soft_l1', f_scale=0.1, args=(frates, mx))
         x0 = np.array([-0.75, 0.1, 0.1, 40])
         bot = np.array([-np.inf, 0, 0, -np.inf])  # lower limit
         top = np.array([0, np.inf, 20, np.inf])  # upper limit
-        dn = least_squares(self.fun, x0, loss="soft_l1", f_scale=0.1, args=(frates, mn))
+        dn = least_squares(self.fun, x0, loss='soft_l1', f_scale=0.1, args=(frates, mn))
         if plot:
             fr_test = np.linspace(np.amin(frates), np.amax(frates), 100)
             mx_test = self.base_fun(up.x, fr_test)
             plt.figure()
-            plt.plot(frates, mx, ".")
+            plt.plot(frates, mx, '.')
             plt.plot(fr_test, mx_test)
             print(up.x)
             mn_test = self.base_fun(dn.x, fr_test)
             plt.plot(fr_test, mn_test)
-            plt.plot(frates, mn, ".")
+            plt.plot(frates, mn, '.')
             print(dn.x)
             plt.show()
         self.xup = up.x
@@ -412,18 +409,18 @@ class Spike_Model_Nlin:
 
 def train_Models(SpikeInfo, unit_column, Waveforms, n_comp=5, model_type=Spike_Model):
     """trains models for all units, using labels from given unit_column"""
-    logger.debug("training model on: " + unit_column)
+    logger.debug('training model on: ' + unit_column)
     units = get_units(SpikeInfo, unit_column)
 
     Models = {}
     for unit in units:
         # get the corresponding spikes - restrict training to good spikes
-        SInfo = SpikeInfo.groupby([unit_column, "good"]).get_group((unit, True))
+        SInfo = SpikeInfo.groupby([unit_column, 'good']).get_group((unit, True))
         # data
-        ix = SInfo["id"]
-        ix = np.array(ix.values, dtype="int32")
+        ix = SInfo['id']
+        ix = np.array(ix.values, dtype='int32')
         T = Waveforms[:, ix]
-        frates = SInfo["frate_fast"].values
+        frates = SInfo['frate_fast'].values
         # model
         Models[unit] = model_type(n_comp=n_comp)
         Models[unit].fit(T, frates)
@@ -483,21 +480,21 @@ def calc_update_frates(SpikeInfo, unit_column, kernel_fast, kernel_slow):
     to_units = get_units(SpikeInfo, unit_column, remove_unassigned=False)
 
     # estimating firing rate profile for "from unit" and getting the rate at "to unit" timepoints
-    SIgroups = SpikeInfo.groupby([unit_column, "segment"])
-    for i in SpikeInfo["segment"].unique():
+    SIgroups = SpikeInfo.groupby([unit_column, 'segment'])
+    for i in SpikeInfo['segment'].unique():
         for from_unit in from_units:
             if (from_unit, i) in SIgroups.groups:
                 SInfo = SIgroups.get_group((from_unit, i))
 
                 # spike times
-                from_times = SInfo["time"].values
+                from_times = SInfo['time'].values
 
                 # estimate its own rate at its own spike times
                 rate = est_rate(from_times, from_times, kernel_fast)
 
                 # set
-                ix = SInfo["id"]
-                SpikeInfo.loc[ix, "frate_fast"] = rate
+                ix = SInfo['id']
+                SpikeInfo.loc[ix, 'frate_fast'] = rate
 
             # the rates on others
             for to_unit in to_units:
@@ -505,13 +502,13 @@ def calc_update_frates(SpikeInfo, unit_column, kernel_fast, kernel_slow):
                     SInfo = SIgroups.get_group((to_unit, i))
 
                     # spike times
-                    to_times = SInfo["time"].values
+                    to_times = SInfo['time'].values
 
                     # the rates of the other units at this units spike times
                     pred_rate = est_rate(from_times, to_times, kernel_slow)
 
-                    ix = SInfo["id"]
-                    SpikeInfo.loc[ix, "frate_from_" + from_unit] = pred_rate
+                    ix = SInfo['id']
+                    SpikeInfo.loc[ix, 'frate_from_' + from_unit] = pred_rate
 
 
 """
@@ -543,7 +540,7 @@ def Score_spikes(
 ):
     """Score all spikes using Models"""
 
-    spike_ids = SpikeInfo["id"].values
+    spike_ids = SpikeInfo['id'].values
 
     units = get_units(SpikeInfo, unit_column)
     n_units = len(units)
@@ -553,9 +550,7 @@ def Score_spikes(
     Rates = np.zeros((n_spikes, n_units))
 
     for i, spike_id in enumerate(spike_ids):
-        Rates[i, :] = [
-            SpikeInfo.loc[spike_id, "frate_from_%s" % unit] for unit in units
-        ]
+        Rates[i, :] = [SpikeInfo.loc[spike_id, f'frate_from_{unit}'] for unit in units]
         spike = Waveforms[:, spike_id]
 
         for j, unit in enumerate(units):
@@ -609,23 +604,23 @@ def calculate_pairwise_distances(
 
     for i, unit_a in enumerate(units):
         for j, unit_b in enumerate(units):
-            ix_a = SpikeInfo.groupby([unit_column, "good"]).get_group((unit_a, True))[
-                "id"
+            ix_a = SpikeInfo.groupby([unit_column, 'good']).get_group((unit_a, True))[
+                'id'
             ]
-            ix_b = SpikeInfo.groupby([unit_column, "good"]).get_group((unit_b, True))[
-                "id"
+            ix_b = SpikeInfo.groupby([unit_column, 'good']).get_group((unit_b, True))[
+                'id'
             ]
 
             T_a = X[ix_a, :]
             T_b = X[ix_b, :]
 
             if use_fr:
-                fr_a = SpikeInfo.groupby([unit_column, "good"]).get_group(
+                fr_a = SpikeInfo.groupby([unit_column, 'good']).get_group(
                     (unit_a, True)
-                )["frate_fast"]
-                fr_b = SpikeInfo.groupby([unit_column, "good"]).get_group(
+                )['frate_fast']
+                fr_b = SpikeInfo.groupby([unit_column, 'good']).get_group(
                     (unit_b, True)
-                )["frate_fast"]
+                )['frate_fast']
 
                 T_a = np.concatenate([T_a, w * fr_a[:, np.newaxis]], axis=1)
                 T_b = np.concatenate([T_b, w * fr_b[:, np.newaxis]], axis=1)
