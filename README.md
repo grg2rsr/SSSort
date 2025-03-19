@@ -4,22 +4,49 @@ A dedicated spike sorting algorithm for single sensillum recordings
  
 ## Authors
 + Georg Raiser, PhD, Champalimaud Research, grg2rsr@gmail.com
-+ 
-+ 
-
++ Alicia Garrido-Peña, Universidad Autonoma de Madrid, alicia.garrido@uam.es
++ Lydia Ellison, University of Sussex, Ellison@sussex.ac.uk.
  
 ## Summary
+///
 _SSSort_ is a spike sorting algorithm for single sensillum recordings (SSR). _SSSort_ is the successor of [_SeqPeelSort_](https://github.com/grg2rsr/SeqPeelSort). Both algorithms have been designed to sort spikes from SSR into units, adressing the challenge that spike shape in SSR can change quite a lot, depending on the unit's firing rate. However, the core of both algorithms is quite different. While _SeqPeelSort_ tries to estimate the distribution of possible spike shapes and attempts to template match many different spike shapes drawn from those estimated distributions, _SSSort_ forms an explicit model on how the firing rate impacts the spike shape. Although developed for data from insect single sensillum recordings, _SSSort_ can probably be used for any type of recordings in which spike shape changes as a function of firing rate, however currently only single electrode recordings are implemented.
- 
+
+## Publication
+More information about _SSSort_ can be found in it's accompanying publication: https://pubmed.ncbi.nlm.nih.gov/39709073/. Please cite this paper in your publication if you use _SSSort_.
+
 ## Installation
 
+### from pypi (recommended)
+The simplest way to install `SSSort` is to install it directly from pypi. It is recommended to first create a virtual environment:
+
+#### creating a dedicated virtual environment for SSSort
+[this](https://realpython.com/python-virtual-environments-a-primer/) is a good guide with examples for all operating systems. In short, run in a terminal:
+
+`linux`
+```
+python3 -m venv sssort/
+source venv/bin/activate
+```
+
+`windows`
+```
+py -m venv sssort\
+sssort\Scripts\activate
+```
+
+#### installing from pypi
+After having created and activated a virtual environment, simply type
+```
+pip install SSSort
+```
+
+### from the repository 
+you will need git, and it is recommended to do the installation in a dedicated virtual environment like described above
 ```
 git clone https://github.com/grg2rsr/SSSort.git
 cd SSSort
-conda env create -n sssort -f ./envs/ubuntu_22_04.yml
-python setup.py
+pip install -e .
 ```
-currently does it.
 
 ## Usage
 To launch SSSort, generally use:
