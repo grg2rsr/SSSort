@@ -2,70 +2,84 @@ import sys
 import argparse
 import subprocess
 from pathlib import Path
-import platform
+# import platform
 
-if __name__ == '__main__':
-    if platform.system() == 'Linux':
-        parser = argparse.ArgumentParser(
-            description='this is Single Sensillum Sort v.XX authors: Georg Raiser, XX'
-        )
-        parser.add_argument(
-            'mode',
-            choices=['convert', 'detect', 'sort', 'inspect', 'merge', 'postprocess'],
-            help='determines what to do',
-        )
-        parser.add_argument('path', help='path to the config file')
-        parser.add_argument(
-            '-e',
-            '--extra-args',
-            action='store',
-            dest='extra_args',
-            help='optional extra arguments, comma separated',
-        )
-        parser.add_argument(
-            '-v', '--verbose', action='store_true', help='print out system call'
-        )
+def _arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description='this is Single Sensillum Sort v.XX authors: Georg Raiser, XX',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        argument_default=argparse.SUPPRESS
+    )
+    parser.add_argument(
+        'mode',
+        choices=['convert', 'detect', 'sort', 'inspect', 'merge', 'postprocess'],
+        help='determines what to do',
+    )
+    parser.add_argument('path', help='path to the config file')
 
-        # argument parse
-        args = vars(parser.parse_args())
-        extra_args = (
-            args['extra_args'].split(',') if args['extra_args'] is not None else None
-        )
+    parser.add_argument(
+        '-e',
+        '--extra-args',
+        action='store',
+        dest='extra_args',
+        help='optional extra arguments, comma separated',
+    )
+    parser.add_argument(
+        '-v', '--verbose', action='store_true', help='print verbose output' # this could be influencing the logger
+    )
 
-        # paths
-        config_path = Path(args['path']).resolve()
-        install_dir = Path(sys.argv[0]).parent
+    return parser
 
-        mode = args['mode']
-
-    else:
-        mode = sys.argv[1]
-        config_path = sys.argv[2]
-        install_dir = Path(sys.argv[0]).parent
+def run(**kwargs):
+    mode = kwargs['mode']
+    src_folder = Path(__file__).parent.resolve()
+    config_path = Path(kwargs['path']).resolve()
 
     if mode == 'convert':
-        if extra_args is not None:
-            extra_args = ' '.join(extra_args)
-            cmd = 'python %s/sssio.py %s %s' % (install_dir, config_path, extra_args)
+        if 'extra_args' in kwargs:
+            extra_args = ' '.join(kwargs['extra_args'])
+            cmd = f"python {src_folder / 'sssio.py'} {config_path} {extra_args}"
         else:
-            cmd = 'python %s/sssio.py %s' % (install_dir, config_path)
+            cmd = f"python {src_folder / 'sssio.py'} {config_path}"
 
     if mode == 'detect':
-        cmd = 'python %s/sssort.py %s %s' % (install_dir, config_path, mode)
+        cmd = f"python {src_folder /'sssort.py'} {config_path} {mode}"
 
     if mode == 'sort':
-        cmd = 'python %s/sssort.py %s %s' % (install_dir, config_path, mode)
+        cmd = f"python {src_folder / 'sssort.py'} {config_path} {mode}"
 
     if mode == 'inspect':
-        cmd = 'python %s/inspect_result.py %s' % (install_dir, config_path)
+        cmd = f"python {src_folder / 'inspect_result.py'} {config_path}"
 
     if mode == 'merge':
-        cmd = 'python %s/manual_merger.py %s' % (install_dir, config_path)
+        cmd = f"python {src_folder / 'manual_merger.py'} {config_path}"
 
     if mode == 'postprocess':
-        cmd = 'python %s/post_processing.py %s' % (install_dir, config_path)
+        cmd = f"python {src_folder / 'post_processing.py'} {config_path}"
 
-    if args['verbose']:
-        print('executing: %s' % cmd)
+    if 'verbose' in kwargs:
+        print(f'executing: {cmd}')
 
-    subprocess.call(cmd, shell=True)
+    # Launch the subprocess
+    process = subprocess.Popen(cmd.split(' '), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    # Read the output line by line and print it to the terminal
+    while True:
+        output = process.stdout.readline()
+        if output == '' and process.poll() is not None:
+            break
+        if output:
+            print(output.strip())  # Print the output to the terminal
+
+    # Get any remaining error output
+    stderr_output = process.stderr.read()
+    if stderr_output:
+        print(stderr_output.strip(), file=sys.stderr)
+
+    # Wait for the subprocess to finish
+    process.wait()
+
+def main_cli():
+    """Command-line interface for transferring behavioral data to the local server."""
+    args = _arg_parser().parse_args()
+    run(**vars(args), interactive=True)
