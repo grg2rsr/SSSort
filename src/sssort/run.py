@@ -80,6 +80,5 @@ def run(**kwargs):
     process.wait()
 
 def main_cli():
-    """Command-line interface for transferring behavioral data to the local server."""
     args = _arg_parser().parse_args()
     run(**vars(args), interactive=True)

@@ -83,8 +83,6 @@ def handle_unhandled_exception(exc_type, exc_value, exc_traceback):
   ######   #######  ##    ##    ###    ######## ##     ##    ##    ######## ##     ##  ######  
  
 """
-supported_filetypes = ['.asc', '.smr', '.bin', '.csv']
-
 
 def csv2seg(path, t_col=0, v_col=1, header=1):
     with open(path, 'r') as fH:
@@ -193,20 +191,19 @@ if __name__ == '__main__':
     path = Path(sys.argv[1])  #
     args = sys.argv[2:] if len(sys.argv) > 1 else None
 
-    if path.suffix in supported_filetypes:
-        match path.suffix:
-            case '.asc':
-                seg = asc2seg(path)
-            case '.csv':
-                seg = csv2seg(path, *args)
-            case '.smr':
-                seg = smr2seg(path, *args)
-            case '.bin':
-                seg = raw2seg(path, *args)
-    else:
-        logging.critical(
-            f'reading files of type {path.suffix} is currently not supported, but feel free to post an issue on github.com/grg2rsr/SSSort'
-        )
+    match path.suffix.lower():
+        case '.asc':
+            seg = asc2seg(path)
+        case '.csv':
+            seg = csv2seg(path, *args)
+        case '.smr':
+            seg = smr2seg(path, *args)
+        case '.bin':
+            seg = raw2seg(path, *args)
+        case _:
+            logging.critical(
+                f'reading files of type {path.suffix} is currently not supported, but feel free to post an issue on github.com/grg2rsr/SSSort'
+            )
 
     # seg = smr2seg(path, channel_index=0)
     Blk = neo.core.Block()
