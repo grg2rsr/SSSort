@@ -3,6 +3,7 @@ from pathlib import Path
 
 # sci
 import numpy as np
+from sklearn.decomposition import PCA
 
 # ephys
 import quantities as pq
@@ -14,8 +15,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 # own
-import sssort.functions as sf
-from sssort import sssio
+import functions as sf
+import sssio
 
 logger = sssio.get_logger()
 

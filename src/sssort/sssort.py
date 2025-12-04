@@ -22,11 +22,11 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 # own
-import sssort.functions as sf
-import sssort.plotters as sp
+import functions as sf
+import plotters as sp
 import sssio
 
-print('This is SSSort v1.0.0')
+print('This is SSSort v1.0.0') # FIXME
 print('author: Georg Raiser - grg2rsr@gmail.com')
 
 """
@@ -42,7 +42,9 @@ print('author: Georg Raiser - grg2rsr@gmail.com')
 """
 
 config_path = Path(os.path.abspath(sys.argv[1]))
+# config_path = Path.home() / 'code' / 'SSSort' / 'examples' / 'tmp.ini'
 mode = sys.argv[2]
+# mode = 'detect'
 
 Config = configparser.ConfigParser()
 Config.read(config_path)
@@ -112,13 +114,13 @@ freq = Config.getfloat('preprocessing', 'highpass_freq')
 logger.info(f'highpass filtering data at {freq:.2f} Hz')
 for seg in Blk.segments:
     seg.analogsignals[0] = ele.signal_processing.butter(
-        seg.analogsignals[0], highpass_freq=freq
+        seg.analogsignals[0], highpass_frequency=freq
     )
 
 if Config.getboolean('preprocessing', 'z_score'):
     logger.info('z-scoring signals')
     for seg in Blk.segments:
-        seg.analogsignals = [ele.signal_processing.zscore(seg.analogsignals)]
+        seg.analogsignals = [ele.signal_processing.zscore(seg.analogsignals[0])]
 
 
 """
@@ -158,7 +160,10 @@ if mode == 'detect':
     plt.ion()
     mpl.rcParams['figure.dpi'] = Config.get('output', 'screen_dpi')
     sp.plot_spike_detect_inspect(AnalogSignal, mad_thresh, min_prominence, Config)
-    # plot_spike_detect(AnalogSignal, mad_thresh, min_prominence, N=5, w=2*pq.s)
+    # fig, axes = plt.subplots()
+    # axes.plot(seg.analogsignals[0].times, seg.analogsignals[0].magnitude)
+    # sp.plot_segment(seg, units=None, sigma=0.05, zscore=False, save=None, colors=None)
+    sp.plot_spike_detect(AnalogSignal, mad_thresh, min_prominence, N=5, w=2*pq.s)
     logger.info('only spike detection - press enter to quit')
     input()  # halt terminal here
     plt.ioff()
@@ -390,7 +395,7 @@ for it in range(1, n_max_iter):
     # train models with labels from last iteration
     Models = sf.train_Models(SpikeInfo, prev_unit_col, Waveforms, n_comp=n_model_comp)
     outpath = (plots_folder / f'Models_{prev_unit_col}').with_suffix(fig_format)
-    sf.plot_Models(Models, save=outpath)
+    sp.plot_Models(Models, save=outpath)
 
     # Score spikes with models
     Scores, units = sf.Score_spikes(
@@ -413,7 +418,7 @@ for it in range(1, n_max_iter):
 
     # plot waveforms
     outpath = (plots_folder / f'Waveforms_{this_unit_col}').with_suffix(fig_format)
-    sf.plot_waveforms(
+    sp.plot_waveforms(
         Waveforms,
         SpikeInfo,
         dt.rescale(pq.ms).magnitude,

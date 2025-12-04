@@ -507,7 +507,7 @@ def local_frate(t, mu, tau):
 def est_rate(
     spike_times: np.ndarray,
     eval_times: np.ndarray,
-    sig: np.float,
+    sig: float,
 ) -> np.ndarray:
     """returns estimated rate at spike_times"""
     rate = local_frate(eval_times[:, np.newaxis], spike_times[np.newaxis, :], sig).sum(1)
@@ -577,7 +577,7 @@ def Rss(X, Y):
 
 def Score_spikes(
     Waveforms: np.ndarray,
-    SpikeInfo: np.DataFrame,
+    SpikeInfo: pd.DataFrame,
     unit_column: str,
     Models,  # TODO
     score_metric: callable = Rss,

@@ -1,8 +1,6 @@
-import sys
 import argparse
-import subprocess
 from pathlib import Path
-# import platform
+import os
 
 def _arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -60,24 +58,7 @@ def run(**kwargs):
     if 'verbose' in kwargs:
         print(f'executing: {cmd}')
 
-    # Launch the subprocess
-    process = subprocess.Popen(cmd.split(' '), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
-    # Read the output line by line and print it to the terminal
-    while True:
-        output = process.stdout.readline()
-        if output == '' and process.poll() is not None:
-            break
-        if output:
-            print(output.strip())  # Print the output to the terminal
-
-    # Get any remaining error output
-    stderr_output = process.stderr.read()
-    if stderr_output:
-        print(stderr_output.strip(), file=sys.stderr)
-
-    # Wait for the subprocess to finish
-    process.wait()
+    os.system(cmd)
 
 def main_cli():
     args = _arg_parser().parse_args()
