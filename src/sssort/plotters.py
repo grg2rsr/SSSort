@@ -68,9 +68,7 @@ def plot_Models(Models, max_rates=None, N=5, unit_order=None, save=None, colors=
     if colors is None:
         colors = get_colors(units)
 
-    fig, axes = plt.subplots(
-        ncols=len(units), sharey=True, figsize=[len(units) * 1.5, 3]
-    )
+    fig, axes = plt.subplots(ncols=len(units), sharey=True, figsize=[len(units) * 1.5, 3])
     for i, unit in enumerate(units):
         if max_rates is not None:
             max_rate = max_rates[i]
@@ -111,11 +109,14 @@ def plot_waveforms(
 
     tvec = np.arange(-1 * Waveforms.shape[0] * dt / 2, Waveforms.shape[0] * dt / 2, dt)
 
-    fig, axes = plt.subplots(
-        ncols=len(units), sharey=True, figsize=[len(units) * 1.5, 3]
-    )
+    fig, axes = plt.subplots(ncols=len(units), sharey=True, figsize=[len(units) * 1.5, 3])
 
     for i, unit in enumerate(units):
+        if len(units) > 1:
+            ax = axes[i]
+        else:
+            ax = axes
+
         SIgroup = SpikeInfo.groupby([unit_column, 'good']).get_group((unit, True))
 
         # color by firing rate
@@ -136,7 +137,7 @@ def plot_waveforms(
 
         # axes[i].plot(tvec, T, color=colors[unit],alpha=0.5,lw=1)
         for j in range(T.shape[1]):
-            axes[i].plot(
+            ax.plot(
                 tvec,
                 T[:, frates_order[j]],
                 color=cols[frates_order[j]],
@@ -153,10 +154,10 @@ def plot_waveforms(
         except:  # no good spikes for this unit
             pass
 
-        axes[i].plot(tvec, T, color='gray', alpha=0.5, lw=1, zorder=-1)
+        ax.plot(tvec, T, color='gray', alpha=0.5, lw=1, zorder=-1)
 
-        axes[i].set_title(unit, color=colors[unit])
-        axes[i].set_xlabel('time (ms)')
+        ax.set_title(unit, color=colors[unit])
+        ax.set_xlabel('time (ms)')
 
     sns.despine()
     fig.tight_layout()
@@ -167,9 +168,7 @@ def plot_waveforms(
     return fig, axes
 
 
-def plot_compare_waveforms(
-    Waveforms, SpikeInfo, unit_column, dt, units_compare, N=100, save=None, colors=None
-):
+def plot_compare_waveforms(Waveforms, SpikeInfo, unit_column, dt, units_compare, N=100, save=None, colors=None):
     """for manual merging: comparison plot of two units / waveforms"""
 
     if colors is None:
@@ -332,9 +331,7 @@ def plot_fitted_spikes(
         offset = (St.t_start * fs).simplified.magnitude.astype('int32')
         inds = inds - offset
 
-        ix = np.logical_and(
-            SpikeInfo['time'].values > St.t_start, SpikeInfo['time'].values < St.t_stop
-        )
+        ix = np.logical_and(SpikeInfo['time'].values > St.t_start, SpikeInfo['time'].values < St.t_stop)
         SIgroups = SpikeInfo.iloc[ix].groupby([unit_column, 'segment'])
 
         if (unit, j) in SIgroups.groups:
@@ -410,9 +407,7 @@ def plot_clustering(
     pca = PCA(n_components=n_components)
     X = pca.fit_transform(Waveforms.T)
 
-    fig, axes = plt.subplots(
-        figsize=[7, 7], nrows=n_components, ncols=n_components, sharex=True, sharey=True
-    )
+    fig, axes = plt.subplots(figsize=[7, 7], nrows=n_components, ncols=n_components, sharex=True, sharey=True)
 
     for i, unit in enumerate(units):
         SIgroup = SpikeInfo.groupby([unit_column, 'good']).get_group((unit, True))
@@ -479,9 +474,7 @@ def plot_clustering(
     return fig, axes
 
 
-def plot_spike_detect_inspect(
-    AnalogSignal, min_height, min_prominence, Config=None, w=2 * pq.ms
-):
+def plot_spike_detect_inspect(AnalogSignal, min_height, min_prominence, Config=None, w=2 * pq.ms):
     """interactive window visualizing: prominence and amplitude for each spike
     in a scatter plot. Click on scatter point = shows spike shape"""
 
@@ -489,12 +482,8 @@ def plot_spike_detect_inspect(
 
     mad = sf.MAD(AnalogSignal)
 
-    st_pos = sf.spike_detect(
-        AnalogSignal, min_height=0, min_prominence=0, mode='positive'
-    )
-    st_neg = sf.spike_detect(
-        AnalogSignal, min_height=0, min_prominence=0, mode='negative'
-    )
+    st_pos = sf.spike_detect(AnalogSignal, min_height=0, min_prominence=0, mode='positive')
+    st_neg = sf.spike_detect(AnalogSignal, min_height=0, min_prominence=0, mode='negative')
 
     fig, axes = plt.subplots(ncols=2, nrows=2)
 
@@ -569,9 +558,7 @@ def plot_spike_detect_inspect(
             Config['spike detect']['min_threshold_scale'] = '%.3f' % min_threshold_scale
             Config['spike detect']['min_prominence'] = '%.3f' % min_prominence
 
-            logger.info(
-                'updating config with values for spike amplitude, prominence, and direction'
-            )
+            logger.info('updating config with values for spike amplitude, prominence, and direction')
             with open(Config.filepath, 'w') as fH:
                 Config.write(fH)
 
@@ -600,9 +587,7 @@ def plot_spike_detect_inspect(
     fig.subplots_adjust(top=0.9)
 
 
-def plot_spike_detect(
-    AnalogSignal, mad_thresh, min_prominence, N=4, w=0.2 * pq.s, save=None
-):
+def plot_spike_detect(AnalogSignal, mad_thresh, min_prominence, N=4, w=0.2 * pq.s, save=None):
     """ """
 
     fig, axes = plt.subplots(nrows=N, sharey=True)
@@ -669,16 +654,12 @@ def plot_spike_events(
 ):
     plt.rcParams.update({'font.size': 5})
     for asig in Segment.analogsignals:
-        max_window = int(
-            max_window * asig.sampling_rate
-        )  # FIX conversion from secs to points
+        max_window = int(max_window * asig.sampling_rate)  # FIX conversion from secs to points
 
         asig = asig.reshape(asig.shape[0])
         asig_max = np.amax(asig)
         asig_min = np.amin(asig)
-        n_rows = (
-            asig.shape[0] // max_window
-        )  # compute number of rows needed to plot complete signal
+        n_rows = asig.shape[0] // max_window  # compute number of rows needed to plot complete signal
         n_plots = n_rows // max_row + int(not (n_rows / max_row).is_integer())
 
         # Plot max_row rows per window, plots n_plots to plot the complete signal
@@ -699,14 +680,10 @@ def plot_spike_events(
                 # Convert quantity to NumPy array
                 times_array = asig.times.magnitude
 
-                axes[idx].plot(
-                    times_array[ini:end], data_array[ini:end], linewidth=1, color='k'
-                )
+                axes[idx].plot(times_array[ini:end], data_array[ini:end], linewidth=1, color='k')
 
                 if st is None:
-                    st = Segment.spiketrains[
-                        0
-                    ]  # get spike trains (assuming there's only one spike train)
+                    st = Segment.spiketrains[0]  # get spike trains (assuming there's only one spike train)
 
                 t_ini = asig.times[ini]
                 t_end = asig.times[end]
@@ -814,9 +791,7 @@ def plot_spike_labels(ax, SpikeInfo, spike_label_interval):
 
 
 # TODO: change wsize by config param + transform
-def plot_by_unit(
-    ax, st, asig, Models, SpikeInfo, unit_column, unit_order=None, colors=None, wsize=40
-):
+def plot_by_unit(ax, st, asig, Models, SpikeInfo, unit_column, unit_order=None, colors=None, wsize=40):
     try:
         left = wsize[0]
         right = wsize[1]
@@ -867,11 +842,7 @@ def plot_by_unit(
 
         try:
             if type(Models).__name__ == 'dict':
-                frates = (
-                    SpikeInfo.groupby([unit_column])
-                    .get_group((unit))['frate_fast']
-                    .values
-                )
+                frates = SpikeInfo.groupby([unit_column]).get_group((unit))['frate_fast'].values
                 pred_spikes = [Models[unit].predict(f) for f in frates]
             else:
                 Waveforms = Models
@@ -908,9 +879,7 @@ def plot_fitted_spikes_pp(
     spike_label_interval=0,
 ):
     """plot to inspect fitted spikes"""
-    fig, axes = plt.subplots(
-        nrows=2, sharex=True, sharey=True, num=1, clear=True, figsize=[4, 3]
-    )
+    fig, axes = plt.subplots(nrows=2, sharex=True, sharey=True, num=1, clear=True, figsize=[4, 3])
 
     asig = Segment.analogsignals[0]
     fs = asig.sampling_rate
@@ -939,9 +908,7 @@ def plot_fitted_spikes_pp(
     for ax in axes:
         ax.set_ylim(ylim)
 
-    st = Segment.spiketrains[
-        0
-    ]  # get all spike trains (assuming there's only one spike train)
+    st = Segment.spiketrains[0]  # get all spike trains (assuming there's only one spike train)
     if rejs is None:
         rejs = SpikeInfo['time'][SpikeInfo[unit_column] == '-2']
     units = sf.get_units(SpikeInfo, unit_column)
@@ -955,9 +922,7 @@ def plot_fitted_spikes_pp(
         label='rejected spike',
     )
 
-    plot_by_unit(
-        axes[1], st, asig, Models, SpikeInfo, unit_column, unit_order, colors, wsize
-    )
+    plot_by_unit(axes[1], st, asig, Models, SpikeInfo, unit_column, unit_order, colors, wsize)
 
     if box is not None:
         plot_box(axes[0], box)
@@ -997,15 +962,11 @@ def plot_fitted_spikes_complete(
 ):
     asig = seg.analogsignals[0]
 
-    max_window = int(
-        max_window * asig.sampling_rate
-    )  # FIX conversion from secs to points
+    max_window = int(max_window * asig.sampling_rate)  # FIX conversion from secs to points
     n_plots = asig.shape[0] // max_window
 
     for n_plot in range(0, n_plots):
-        outpath = plots_folder / (
-            'fitted_spikes%s_%s_%d' % (extension, max_window, n_plot) + fig_format
-        )
+        outpath = plots_folder / ('fitted_spikes%s_%s_%d' % (extension, max_window, n_plot) + fig_format)
         ini = n_plot * max_window
         end = ini + max_window
         zoom = [ini, end] / asig.sampling_rate
@@ -1027,9 +988,7 @@ def plot_fitted_spikes_complete(
         )
 
 
-def plot_means(
-    means, units, template_a, template_b, asigs, outpath=None, show=False, colors=None
-):
+def plot_means(means, units, template_a, template_b, asigs, outpath=None, show=False, colors=None):
     fig, axes = plt.subplots(ncols=len(units), figsize=[len(units) * 3, 4])
 
     if colors is None:

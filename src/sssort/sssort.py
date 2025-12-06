@@ -26,7 +26,7 @@ import functions as sf
 import plotters as sp
 import sssio
 
-print('This is SSSort v1.0.0') # FIXME
+print('This is SSSort v1.0.0')  # FIXME
 print('author: Georg Raiser - grg2rsr@gmail.com')
 
 """
@@ -42,9 +42,9 @@ print('author: Georg Raiser - grg2rsr@gmail.com')
 """
 
 config_path = Path(os.path.abspath(sys.argv[1]))
-# config_path = Path.home() / 'code' / 'SSSort' / 'examples' / 'tmp.ini'
+# config_path = Path.home() / 'code' / 'SSSort' / 'examples' / 'data' / 'Acetophenone_1.ini'
 mode = sys.argv[2]
-# mode = 'detect'
+# mode = 'sort'
 
 Config = configparser.ConfigParser()
 Config.read(config_path)
@@ -113,9 +113,7 @@ for seg in Blk.segments:
 freq = Config.getfloat('preprocessing', 'highpass_freq')
 logger.info(f'highpass filtering data at {freq:.2f} Hz')
 for seg in Blk.segments:
-    seg.analogsignals[0] = ele.signal_processing.butter(
-        seg.analogsignals[0], highpass_frequency=freq
-    )
+    seg.analogsignals[0] = ele.signal_processing.butter(seg.analogsignals[0], highpass_frequency=freq)
 
 if Config.getboolean('preprocessing', 'z_score'):
     logger.info('z-scoring signals')
@@ -163,7 +161,7 @@ if mode == 'detect':
     # fig, axes = plt.subplots()
     # axes.plot(seg.analogsignals[0].times, seg.analogsignals[0].magnitude)
     # sp.plot_segment(seg, units=None, sigma=0.05, zscore=False, save=None, colors=None)
-    sp.plot_spike_detect(AnalogSignal, mad_thresh, min_prominence, N=5, w=2*pq.s)
+    sp.plot_spike_detect(AnalogSignal, mad_thresh, min_prominence, N=5, w=2 * pq.s)
     logger.info('only spike detection - press enter to quit')
     input()  # halt terminal here
     plt.ioff()
@@ -177,9 +175,7 @@ for i, seg in enumerate(Blk.segments):
     st.annotate(kind='all_spikes')
 
     if len(st) == 0:
-        logger.critical(
-            'No spikes detected, change the threshold values in the configuration file'
-        )
+        logger.critical('No spikes detected, change the threshold values in the configuration file')
         exit()
 
     # remove border spikes
@@ -429,57 +425,43 @@ for it in range(1, n_max_iter):
 
     # Model eval
     valid_ix = np.where(SpikeInfo[this_unit_col] != '-1')[0]
-    Rss_sum = (
-        np.sum(np.min(Scores[valid_ix], axis=1)) / valid_ix.shape[0]
-    )  # Waveforms.shape[1]
+    Rss_sum = np.sum(np.min(Scores[valid_ix], axis=1)) / valid_ix.shape[0]  # Waveforms.shape[1]
     ScoresSum.append(Rss_sum)
     units = sf.get_units(SpikeInfo, this_unit_col)
     AICs.append(len(units) - 2 * np.log(Rss_sum))
 
     # print iteration info
     n_changes, _ = sf.get_changes(SpikeInfo, this_unit_col)
-    logger.info(
-        f'Iteration: {it} - Rss: {Rss_sum:.2e} - # reassigned spikes: {n_changes}'
-    )
+    logger.info(f'Iteration: {it} - Rss: {Rss_sum:.2e} - # reassigned spikes: {n_changes}')
 
     # Plot zoom inspect for current iteration
     zoom = np.array(Config.get('output', 'zoom').split(','), dtype='float32') / 1000
     for j, Seg in enumerate(Blk.segments):
         seg_name = Path(Seg.annotations['filename']).stem
         outpath = plots_folder / (seg_name + '_fitted_spikes_' + str(it) + fig_format)
-        sp.plot_fitted_spikes_pp(
-            Seg, Models, SpikeInfo, this_unit_col, zoom=zoom, save=outpath
-        )
+        sp.plot_fitted_spikes_pp(Seg, Models, SpikeInfo, this_unit_col, zoom=zoom, save=outpath)
 
     # TODO docme
     break_flag = False
 
-    if sf.check_convergence(
-        SpikeInfo, it, n_hist, conv_crit
-    ):  # refactor conv_crit into 'tol'
+    if sf.check_convergence(SpikeInfo, it, n_hist, conv_crit):  # refactor conv_crit into 'tol'
         logger.info('convergence criterion reached')
 
         # check for merges - if no merge - exit
         logger.info('checking for merges')
-        Avgs, Sds = sf.calculate_pairwise_distances(
-            Waveforms, SpikeInfo, this_unit_col, use_fr=use_fr, w=fr_weight
-        )
+        Avgs, Sds = sf.calculate_pairwise_distances(Waveforms, SpikeInfo, this_unit_col, use_fr=use_fr, w=fr_weight)
         merge = sf.best_merge(Avgs, Sds, units, clust_alpha, exclude=rejected_merges)
 
         if force_merge:  # force merge
             while len(merge) == 0:
                 clust_alpha += alpha_incr
                 logger.info(f'increasing alpha to: {clust_alpha:.2f}')
-                merge = sf.best_merge(
-                    Avgs, Sds, units, clust_alpha, exclude=rejected_merges
-                )
+                merge = sf.best_merge(Avgs, Sds, units, clust_alpha, exclude=rejected_merges)
 
                 # bail condition in case all possible merges are rejected manually by the user
                 # an min numer is not reached yet
                 if clust_alpha > max_alpha:
-                    logger.critical(
-                        'no more good merges, quitting before reaching number of desired clusters'
-                    )
+                    logger.critical('no more good merges, quitting before reaching number of desired clusters')
                     break_flag = True
                     break
         if break_flag:
@@ -502,12 +484,8 @@ for it in range(1, n_max_iter):
                         colors[k] = 'gray'
                 plt.ion()
                 mpl.rcParams['figure.dpi'] = Config.get('output', 'screen_dpi')
-                fig, axes = sp.plot_clustering(
-                    Waveforms, SpikeInfo, this_unit_col, colors=colors
-                )
-                fig, axes = sp.plot_compare_waveforms(
-                    Waveforms, SpikeInfo, this_unit_col, dt, merge
-                )
+                fig, axes = sp.plot_clustering(Waveforms, SpikeInfo, this_unit_col, colors=colors)
+                fig, axes = sp.plot_compare_waveforms(Waveforms, SpikeInfo, this_unit_col, dt, merge)
 
                 # ask for user input
                 if input(f'merge {merge[0]} with {merge[1]} (Y/N)?') == 'Y':
@@ -532,10 +510,7 @@ for it in range(1, n_max_iter):
                 break
 
     if force_merge:
-        if (
-            len(sf.get_units(SpikeInfo, this_unit_col, remove_unassigned=True))
-            == n_clust_final
-        ):
+        if len(sf.get_units(SpikeInfo, this_unit_col, remove_unassigned=True)) == n_clust_final:
             logger.info(f'aborting, desired number of {n_clust_final} clusters reached')
             break
 
@@ -601,9 +576,7 @@ sp.plot_clustering(Waveforms, SpikeInfo, final_unit_col, save=outpath, N=100)
 units = sf.get_units(SpikeInfo, final_unit_col)
 for unit in units:
     outpath = (plots_folder / f'Clustering_{unit}').with_suffix(fig_format)
-    sp.plot_clustering(
-        Waveforms, SpikeInfo, final_unit_col, color_by=unit, save=outpath, N=2000
-    )
+    sp.plot_clustering(Waveforms, SpikeInfo, final_unit_col, color_by=unit, save=outpath, N=2000)
 
 # plotting waveforms
 outpath = (plots_folder / 'waveforms_final').with_suffix(fig_format)
@@ -629,9 +602,7 @@ for i, seg in enumerate(Blk.segments):
     sts = [SpikeTrain]
     for unit in units:
         times = SpikeTrain.times[np.array(spike_labels) == unit]
-        st = neo.core.SpikeTrain(
-            times, t_start=SpikeTrain.t_start, t_stop=SpikeTrain.t_stop
-        )
+        st = neo.core.SpikeTrain(times, t_start=SpikeTrain.t_start, t_stop=SpikeTrain.t_stop)
         st.annotate(unit=unit)
         sts.append(st)
     seg.spiketrains = sts
@@ -640,9 +611,7 @@ for i, seg in enumerate(Blk.segments):
     asigs = [seg.analogsignals[0]]
     for unit in units:
         (St,) = sf.select_by_dict(seg.spiketrains, unit=unit)
-        frate = ele.statistics.instantaneous_rate(
-            St, kernel=kernel, sampling_period=1 / fs
-        )
+        frate = ele.statistics.instantaneous_rate(St, kernel=kernel, sampling_period=1 / fs)
         frate.annotate(kind='frate_fast', unit=unit)
         asigs.append(frate)
     seg.analogsignals = asigs
@@ -672,9 +641,7 @@ if Config.getboolean('output', 'csv'):
         title = Path(Seg.annotations['filename']).stem
         for j, unit in enumerate(units):
             (St,) = sf.select_by_dict(Seg.spiketrains, unit=unit)
-            outpath = results_folder / (
-                f'Segment_{seg_name}_unit_{unit}_spike_times.txt'
-            )
+            outpath = results_folder / (f'Segment_{seg_name}_unit_{unit}_spike_times.txt')
             np.savetxt(outpath, St.times.magnitude)
 
     # firing rates - full res
@@ -715,9 +682,7 @@ zoom = np.array(Config.get('output', 'zoom').split(','), dtype='float32') / 1000
 for j, Seg in enumerate(Blk.segments):
     seg_name = Path(Seg.annotations['filename']).stem
     outpath = (plots_folder / f'{seg_name}_fitted_spikes').with_suffix(fig_format)
-    sp.plot_fitted_spikes(
-        Seg, j, Models, SpikeInfo, final_unit_col, wsize, zoom=zoom, save=outpath
-    )
+    sp.plot_fitted_spikes(Seg, j, Models, SpikeInfo, final_unit_col, wsize, zoom=zoom, save=outpath)
 
 # plot final models
 outpath = (plots_folder / f'{seg_name}_models_final').with_suffix(fig_format)
